@@ -10,6 +10,7 @@ import { buildCorsOptions } from './common/middlewares/cors';
 import { createHttpLogger } from './logger';
 import { notFoundHandler } from './common/middlewares/not-found';
 import { createErrorHandler } from './common/middlewares/error-handler';
+import { setupSwagger } from './config/swagger.config';
 
 interface AppDependencies {
   config: AppConfig;
@@ -33,6 +34,7 @@ export const createApp = ({
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  setupSwagger(app, config);
   app.use('/v1', buildApiRouter({ knex }));
 
   app.use(notFoundHandler());
