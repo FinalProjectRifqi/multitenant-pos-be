@@ -16,6 +16,41 @@ export type RequirePermissionFactory = (
   requiredPermission?: string,
 ) => RequestHandler;
 
+const extractBearerToken = (authorizationHeader?: string): string => {
+  if (!authorizationHeader) {
+    throw authTokenMissingError();
+  }
+
+  if (!authorizationHeader.startsWith('Bearer ')) {
+    throw authTokenInvalidError();
+  }
+
+  const token = authorizationHeader.slice('Bearer '.length).trim();
+
+  if (!token) {
+    throw authTokenInvalidError();
+  }
+
+  return token;
+};
+
+const isJwtTokenPayload = (
+  decodedPayload: unknown,
+): decodedPayload is JwtTokenPayload => {
+  if (!decodedPayload || typeof decodedPayload !== 'object') {
+    return false;
+  }
+
+  const payload = decodedPayload as Partial<JwtTokenPayload>;
+
+  return (
+    typeof payload.sub === 'string' &&
+    payload.sub.length > 0 &&
+    Array.isArray(payload.permission) &&
+    payload.permission.every((permission) => typeof permission === 'string')
+  );
+};
+
 export const buildPermissionMiddleware = (
   config: AppConfig,
   logger: Logger,
@@ -25,28 +60,22 @@ export const buildPermissionMiddleware = (
   return (requiredPermission?: string): RequestHandler =>
     async (req, _res, next) => {
       try {
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader) {
-          throw authTokenMissingError();
-        }
-
-        if (!authHeader.startsWith('Bearer ')) {
-          throw authTokenInvalidError();
-        }
-
-        const rawToken = authHeader.split(' ')[1];
-
-        if (!rawToken) {
-          throw authTokenInvalidError();
-        }
+        const rawToken = extractBearerToken(req.headers.authorization);
 
         let payload: JwtTokenPayload;
 
         try {
           const { payload: decoded } = await jwtVerify(rawToken, encodedSecret);
-          payload = decoded as unknown as JwtTokenPayload;
+
+          if (!isJwtTokenPayload(decoded)) {
+            throw authTokenInvalidError();
+          }
+
+          payload = decoded;
         } catch (joseError) {
+          if (joseError instanceof AppError) {
+            throw joseError;
+          }
           if (joseError instanceof JoseErrors.JWTExpired) {
             throw authTokenExpiredError();
           }
