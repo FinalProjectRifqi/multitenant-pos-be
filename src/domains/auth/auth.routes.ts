@@ -27,7 +27,7 @@ export const buildAuthRouter = ({
   const controller = new AuthController(service);
 
   router.post(
-    '/',
+    '/login',
     validateRequest(LoginDto),
     asyncHandler((req, res) => controller.login(req, res)),
   );
