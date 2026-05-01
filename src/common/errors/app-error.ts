@@ -1,14 +1,17 @@
 import type { ErrorCode } from './error-codes';
+import type { DomainErrorCode } from './error-codes-domain';
+
+export type AppErrorCode = ErrorCode | DomainErrorCode;
 
 interface AppErrorParams {
-  code: ErrorCode;
+  code: AppErrorCode;
   message: string;
   status: number;
   details?: unknown;
 }
 
 export class AppError extends Error {
-  public readonly code: ErrorCode;
+  public readonly code: AppErrorCode;
   public readonly status: number;
   public readonly details?: unknown;
 

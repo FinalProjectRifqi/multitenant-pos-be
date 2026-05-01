@@ -35,7 +35,7 @@ export const createApp = ({
   app.use(express.urlencoded({ extended: true }));
 
   setupSwagger(app, config);
-  app.use('/v1', buildApiRouter({ knex }));
+  app.use('/v1', buildApiRouter({ knex, config, logger }));
 
   app.use(notFoundHandler());
   app.use(createErrorHandler(logger));
