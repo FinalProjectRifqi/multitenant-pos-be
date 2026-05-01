@@ -6,6 +6,7 @@ import type { AppConfig } from './index';
 import { healthSwaggerDoc } from '../swagger/health.swagger';
 import { ordersSwaggerDoc } from '../swagger/orders.swagger';
 import { authSwaggerDoc } from '../swagger/auth.swagger';
+import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -32,14 +33,17 @@ const getPackageMetadata = (): PackageMetadata => {
       name: parsed.name,
       version: parsed.version,
     };
-  } catch (_error) {
+  } catch {
     return {};
   }
 };
 
 const mergeRouteDocs = (
   docs: SwaggerRouteDoc[],
-): { tags: Array<{ name: string; description?: string }>; paths: Record<string, unknown> } => {
+): {
+  tags: Array<{ name: string; description?: string }>;
+  paths: Record<string, unknown>;
+} => {
   const tags = new Map<string, { name: string; description?: string }>();
   const paths: Record<string, unknown> = {};
 
@@ -58,7 +62,12 @@ const mergeRouteDocs = (
 
 const buildOpenApiDocument = () => {
   const packageMetadata = getPackageMetadata();
-  const routeDocs = [healthSwaggerDoc, ordersSwaggerDoc, authSwaggerDoc];
+  const routeDocs = [
+    healthSwaggerDoc,
+    ordersSwaggerDoc,
+    authSwaggerDoc,
+    businessUnitsSwaggerDoc,
+  ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 
   return {

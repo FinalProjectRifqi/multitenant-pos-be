@@ -24,7 +24,7 @@ export const buildHealthRouter = ({ knex }: HealthRouterDeps): Router => {
           timestamp: new Date().toISOString(),
         },
       });
-    } catch (error) {
+    } catch {
       res.status(503).json({
         success: false,
         error: {

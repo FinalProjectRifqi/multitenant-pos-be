@@ -1,1 +1,1 @@
-export interface OrderRepository {}
+export type OrderRepository = object;

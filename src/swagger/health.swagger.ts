@@ -49,8 +49,14 @@ export const healthSwaggerDoc = {
                     error: {
                       type: 'object',
                       properties: {
-                        code: { type: 'string', example: 'DATABASE_UNAVAILABLE' },
-                        message: { type: 'string', example: 'Database unavailable' },
+                        code: {
+                          type: 'string',
+                          example: 'DATABASE_UNAVAILABLE',
+                        },
+                        message: {
+                          type: 'string',
+                          example: 'Database unavailable',
+                        },
                       },
                     },
                     data: {

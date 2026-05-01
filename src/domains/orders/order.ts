@@ -1,1 +1,1 @@
-export interface Order {}
+export type Order = object;

@@ -13,7 +13,7 @@ import {
 } from '../../domains/auth/errors/auth.errors';
 
 export type RequirePermissionFactory = (
-  requiredPermission?: string,
+  requiredPermission?: string | string[],
 ) => RequestHandler;
 
 const extractBearerToken = (authorizationHeader?: string): string => {
@@ -69,7 +69,7 @@ export const buildPermissionMiddleware = (
 ): RequirePermissionFactory => {
   const encodedSecret = new TextEncoder().encode(config.jwt.secret);
 
-  return (requiredPermission?: string): RequestHandler =>
+  return (requiredPermission?: string | string[]): RequestHandler =>
     async (req, _res, next) => {
       try {
         const rawToken = extractBearerToken(req.headers.authorization);
@@ -99,8 +99,13 @@ export const buildPermissionMiddleware = (
 
         if (requiredPermission !== undefined) {
           const permissionSet = new Set(payload.permission);
+          const required = Array.isArray(requiredPermission)
+            ? requiredPermission
+            : [requiredPermission];
 
-          if (!permissionSet.has(requiredPermission)) {
+          const hasAllPermissions = required.every((p) => permissionSet.has(p));
+
+          if (!hasAllPermissions) {
             throw authForbiddenError();
           }
         }
