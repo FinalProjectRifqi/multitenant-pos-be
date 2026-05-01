@@ -1,39 +1,14 @@
 <context>
 
-Kita akan membuat sebuah fitur autentikasi. Dalam hal ini adalah login. Jadi, nanti fitu ini akan ada di endpoint POST `/v1/auth/login`. Request yang akan diterima adalah `username` dan `password`. Password yang ada di database itu sudah di-hash menggunakan dependency bcrypt dengan `BCRYPT_SALT_ROUNDS=12`. Jadi, nanti di env (.env, .env.development, .env.example, .env.local) ditambahkan baris itu. Hanya itu saja yang akan kita tambahkan di file env project ini.
+Kita akan membuat sebuah fitur pengecekan permission user. Jadi, fitur ini nanti akan mengecek apa saja sih yang bisa dilakukan oleh user. Datanya itu diambil dari table roles, permissions, user, dan role_permissions.
 
-Response yang akan dihasilkan oleh endpoint tersebut ketika sukses adalah sebagai berikut
+Ide besarnya adalah ketika user misalnya berpindah ke halaman X. Kita akan mengecek apakah user ini pertama-tama punya permission untuk melihat halaman X ini atau tidak. Kalau misalnya tidak. Maka kita akan kembalikan response 403 forbidden. Namun, apabila user memiliki permission untuk melihat (itu permission paling mendasar). Kita akan cek lagi permission apa saja yang bisa dilakukan oleh user. Karena nanti itu akan berpengaruh terhadap action yang bisa dilakukan oleh user.
 
-```json
-{
-   "success": true,
-   "statusCode": 200, --> ini diambil dari header response gitu
-   "message": "Login berhasil!",
-   "accessToken": "string" --> ini string JWT token ya. Tipenya bearer gitu.
-}
-```
+Di dalam database, kita menyimpan permissionnya dengan format `menu:action`. Contohnya `user:add` itu berarti user bisa menambahkan user baru. Itu nanti dilihat lagi dari kolom deskripsi di table permissions.
 
-Nah, untuk si tokennya itu nanti ketika di-decode hasilnya akan seperti ini.
+Sekarang yang menajdi dilema itu adalah bagaimana fitur ini dibuat. Apakah melalui middleware, API endpoint, atau hal lain? We will not use background job for this feature.
 
-```json
-{
-  "exp": 1777619901,
-  "iat": 1777619001,
-  "sub": "string (uuid user)",
-  "typ": "Bearer",
-  "roles": "role_code dari table role",
-  "permission": [
-    // isinya array permission (kolom feature) sesuai role, diambil dari table role_permissions. Kalo ga ada, null aja
-  ],
-  "full_name": "string (full_name user)",
-  "email": "string (email user)",
-  "units": [
-    // isinya array unit (unit_name), diambil dari table units tapi refer ke table user_units. Kalo ga ada, null aja.
-  ]
-}
-```
-
-Kita akan membuatnya di domain auth. Polanya ikuti dari domain orders (walaupun scaffolding). Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder `src/swagger/auth.swagger.ts`.
+Karena ide aku adalah nantinya setiap endpoint dipanggil. Let's say GET /v1/users yang tujuannya mendapatkan semua list user. Maka itu akan memanggil fitur ini dulu. Jadinya, kita harus mencari the most effective way to build this feature.
 
 Kita akan menggunakan paradigma defensive programming, dimana kita akan menjalankan try catch dulu baru logicnya.
 
@@ -115,26 +90,6 @@ CREATE TABLE public.role_permissions (
 	CONSTRAINT role_permissions_pkey PRIMARY KEY (role_permission_id),
 	CONSTRAINT role_permissions_permission_id_foreign FOREIGN KEY (permission_id) REFERENCES public.permissions(permission_id) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT role_permissions_role_id_foreign FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- public.user_units definition
-
--- Drop table
-
--- DROP TABLE public.user_units;
-
-CREATE TABLE public.user_units (
-	user_unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	user_id uuid NOT NULL,
-	unit_id uuid NOT NULL,
-	assigned_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	revoked_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	deleted_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	CONSTRAINT user_units_pkey PRIMARY KEY (user_unit_id),
-	CONSTRAINT user_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT user_units_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 ```
 
