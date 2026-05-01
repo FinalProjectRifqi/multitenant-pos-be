@@ -54,10 +54,7 @@ export class AuthService {
         throw authInvalidRoleError();
       }
 
-      const isPasswordMatch = await bcrypt.compare(
-        dto.password,
-        user.password,
-      );
+      const isPasswordMatch = await bcrypt.compare(dto.password, user.password);
 
       if (!isPasswordMatch) {
         this.logger.warn(

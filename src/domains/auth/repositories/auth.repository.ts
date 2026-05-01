@@ -64,8 +64,9 @@ export class AuthRepository implements IAuthRepository {
   }
 
   async updateLastLogin(userId: string): Promise<void> {
-    await this.db('users')
-      .where('user_id', userId)
-      .update({ last_login_at: this.db.fn.now(), updated_at: this.db.fn.now() });
+    await this.db('users').where('user_id', userId).update({
+      last_login_at: this.db.fn.now(),
+      updated_at: this.db.fn.now(),
+    });
   }
 }
