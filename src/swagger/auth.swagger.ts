@@ -127,10 +127,7 @@ export const authSwaggerDoc = {
                         code: {
                           type: 'string',
                           example: 'AUTH_INACTIVE_ACCOUNT',
-                          enum: [
-                            'AUTH_INACTIVE_ACCOUNT',
-                            'AUTH_INVALID_ROLE',
-                          ],
+                          enum: ['AUTH_INACTIVE_ACCOUNT', 'AUTH_INVALID_ROLE'],
                         },
                         message: {
                           type: 'string',

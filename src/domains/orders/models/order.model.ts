@@ -1,1 +1,1 @@
-export interface OrderModel {}
+export type OrderModel = object;

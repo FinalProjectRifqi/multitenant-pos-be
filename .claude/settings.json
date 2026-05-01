@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Select-Object Name, Mode)",
+      "Read(//c/Users/Nugraha Adhitama/Documents/project/skripsi-rifqi/multitenant-pos-be/src/**)"
+    ]
+  }
+}

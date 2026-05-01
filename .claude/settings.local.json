@@ -11,7 +11,8 @@
       "Bash(xargs grep *)",
       "Bash(Get-ChildItem -Force)",
       "Bash(Select-Object Name, PSIsContainer)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)"
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)",
+      "Bash(Select-Object Mode, Name)"
     ]
   }
 }

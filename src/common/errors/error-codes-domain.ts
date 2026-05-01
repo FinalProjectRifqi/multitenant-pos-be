@@ -7,6 +7,8 @@ export const DomainErrorCodes = {
   AuthTokenExpired: 'AUTH_TOKEN_EXPIRED',
   AuthTokenInvalid: 'AUTH_TOKEN_INVALID',
   AuthForbidden: 'AUTH_FORBIDDEN',
+  UnitNotFound: 'UNIT_NOT_FOUND',
+  UnitInvalidPhone: 'UNIT_INVALID_PHONE',
 } as const;
 
 export type DomainErrorCode =
