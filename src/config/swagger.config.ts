@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import type { AppConfig } from './index';
 import { healthSwaggerDoc } from '../swagger/health.swagger';
 import { ordersSwaggerDoc } from '../swagger/orders.swagger';
+import { authSwaggerDoc } from '../swagger/auth.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -57,7 +58,7 @@ const mergeRouteDocs = (
 
 const buildOpenApiDocument = () => {
   const packageMetadata = getPackageMetadata();
-  const routeDocs = [healthSwaggerDoc, ordersSwaggerDoc];
+  const routeDocs = [healthSwaggerDoc, ordersSwaggerDoc, authSwaggerDoc];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 
   return {

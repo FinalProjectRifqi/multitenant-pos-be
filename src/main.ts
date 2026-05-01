@@ -30,6 +30,7 @@ const bootstrap = async (): Promise<void> => {
 
   server.listen(config.port, () => {
     logger.info(`Server listening on http://localhost:${config.port}`);
+    logger.info(`API Docs on http://localhost:${config.port}/api-docs`);
   });
 
   const shutdown = async (signal: string) => {
