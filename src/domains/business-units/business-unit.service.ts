@@ -15,9 +15,6 @@ import type {
 } from './models/business-unit.model';
 import type { IBusinessUnitRepository } from './repositories/business-unit.repository';
 
-const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export class BusinessUnitService {
   constructor(
     private readonly repository: IBusinessUnitRepository,
@@ -161,14 +158,6 @@ export class BusinessUnitService {
     try {
       this.logger.info({ unitId: id }, 'Fetching business unit by ID');
 
-      if (!this.isValidUuid(id)) {
-        this.logger.warn(
-          { unitId: id },
-          'Business unit not found — invalid UUID format',
-        );
-        throw unitNotFoundError();
-      }
-
       const unit = await this.repository.findById(id);
 
       if (!unit) {
@@ -209,12 +198,18 @@ export class BusinessUnitService {
     try {
       this.logger.info({ unitId: id }, 'Updating business unit');
 
-      if (!this.isValidUuid(id)) {
-        this.logger.warn(
-          { unitId: id },
-          'Business unit not found — invalid UUID format',
-        );
-        throw unitNotFoundError();
+      const hasAnyField =
+        dto.business_unit_name !== undefined ||
+        dto.business_unit_address !== undefined ||
+        dto.business_unit_phone !== undefined ||
+        dto.is_active !== undefined;
+
+      if (!hasAnyField) {
+        throw new AppError({
+          code: ErrorCodes.ValidationFailed,
+          message: 'Minimal satu field harus diisi untuk melakukan pembaruan',
+          status: 400,
+        });
       }
 
       const existing = await this.repository.findById(id);
@@ -272,14 +267,6 @@ export class BusinessUnitService {
     try {
       this.logger.info({ unitId: id }, 'Deleting business unit');
 
-      if (!this.isValidUuid(id)) {
-        this.logger.warn(
-          { unitId: id },
-          'Business unit not found — invalid UUID format',
-        );
-        throw unitNotFoundError();
-      }
-
       const existing = await this.repository.findById(id);
 
       if (!existing) {
@@ -325,9 +312,5 @@ export class BusinessUnitService {
       business_unit_phone: unit.phone_number,
       business_unit_status: unit.status,
     };
-  }
-
-  private isValidUuid(value: string): boolean {
-    return UUID_REGEX.test(value);
   }
 }

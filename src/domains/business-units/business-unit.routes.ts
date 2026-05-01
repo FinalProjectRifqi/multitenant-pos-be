@@ -4,13 +4,14 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config';
 import { asyncHandler } from '../../common/middlewares/async-handler';
 import { validateRequest } from '../../common/middlewares/validate-request';
-import { buildPermissionMiddleware } from '../../routes/routes';
+import { buildPermissionMiddleware } from '../../common/middlewares/require-permission';
 import { BusinessUnitController } from './business-unit.controller';
 import { BusinessUnitService } from './business-unit.service';
 import { BusinessUnitRepository } from './repositories/business-unit.repository';
 import { CreateBusinessUnitDto } from './dto/create-business-unit.dto';
 import { UpdateBusinessUnitDto } from './dto/update-business-unit.dto';
 import { ListBusinessUnitsQueryDto } from './dto/list-business-units-query.dto';
+import { BusinessUnitParamsDto } from './dto/business-unit-params.dto';
 
 interface BusinessUnitRouterDeps {
   knex: Knex;
@@ -54,12 +55,14 @@ export const buildBusinessUnitRouter = ({
   router.get(
     '/:id',
     requirePermission('unit:read'),
+    validateRequest(BusinessUnitParamsDto, 'params'),
     asyncHandler((req, res) => controller.getBusinessUnitById(req, res)),
   );
 
   router.patch(
     '/:id',
     requirePermission(['unit:read', 'unit:update']),
+    validateRequest(BusinessUnitParamsDto, 'params'),
     validateRequest(UpdateBusinessUnitDto),
     asyncHandler((req, res) => controller.updateBusinessUnit(req, res)),
   );
@@ -67,6 +70,7 @@ export const buildBusinessUnitRouter = ({
   router.delete(
     '/:id',
     requirePermission(['unit:read', 'unit:delete']),
+    validateRequest(BusinessUnitParamsDto, 'params'),
     asyncHandler((req, res) => controller.deleteBusinessUnit(req, res)),
   );
 
