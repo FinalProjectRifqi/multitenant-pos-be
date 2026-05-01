@@ -24,3 +24,35 @@ export const authInvalidRoleError = (details?: unknown): AppError =>
     status: 403,
     details,
   });
+
+export const authTokenMissingError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.AuthTokenMissing,
+    message: 'Token autentikasi tidak ditemukan',
+    status: 401,
+    details,
+  });
+
+export const authTokenExpiredError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.AuthTokenExpired,
+    message: 'Token autentikasi telah kadaluarsa. Silakan login kembali.',
+    status: 401,
+    details,
+  });
+
+export const authTokenInvalidError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.AuthTokenInvalid,
+    message: 'Token autentikasi tidak valid',
+    status: 401,
+    details,
+  });
+
+export const authForbiddenError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.AuthForbidden,
+    message: 'Anda tidak memiliki akses ke resource ini',
+    status: 403,
+    details,
+  });

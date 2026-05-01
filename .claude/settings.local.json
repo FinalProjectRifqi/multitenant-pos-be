@@ -10,7 +10,8 @@
       "PowerShell(cd \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\"; ls -Recurse -File | Select-Object -First 30 | ForEach-Object { $_.FullName })",
       "Bash(xargs grep *)",
       "Bash(Get-ChildItem -Force)",
-      "Bash(Select-Object Name, PSIsContainer)"
+      "Bash(Select-Object Name, PSIsContainer)",
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\" -Force | Select-Object Name, @{Name=\"Type\";Expression={if\\($_.PSIsContainer\\){\"DIR\"}else{\"FILE\"}}} | Format-Table -AutoSize)"
     ]
   }
 }

@@ -3,6 +3,10 @@ export const DomainErrorCodes = {
   AuthInvalidCredentials: 'AUTH_INVALID_CREDENTIALS',
   AuthInactiveAccount: 'AUTH_INACTIVE_ACCOUNT',
   AuthInvalidRole: 'AUTH_INVALID_ROLE',
+  AuthTokenMissing: 'AUTH_TOKEN_MISSING',
+  AuthTokenExpired: 'AUTH_TOKEN_EXPIRED',
+  AuthTokenInvalid: 'AUTH_TOKEN_INVALID',
+  AuthForbidden: 'AUTH_FORBIDDEN',
 } as const;
 
 export type DomainErrorCode =
