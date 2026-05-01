@@ -21,13 +21,15 @@ const extractBearerToken = (authorizationHeader?: string): string => {
     throw authTokenMissingError();
   }
 
-  if (!authorizationHeader.startsWith('Bearer ')) {
+  const headerParts = authorizationHeader.trim().split(/\s+/);
+
+  if (headerParts.length !== 2) {
     throw authTokenInvalidError();
   }
 
-  const token = authorizationHeader.slice('Bearer '.length).trim();
+  const [scheme, token] = headerParts;
 
-  if (!token) {
+  if (scheme.toLowerCase() !== 'bearer' || !token) {
     throw authTokenInvalidError();
   }
 
@@ -46,8 +48,18 @@ const isJwtTokenPayload = (
   return (
     typeof payload.sub === 'string' &&
     payload.sub.length > 0 &&
+    payload.typ === 'Bearer' &&
+    typeof payload.roles === 'string' &&
+    payload.roles.length > 0 &&
     Array.isArray(payload.permission) &&
-    payload.permission.every((permission) => typeof permission === 'string')
+    payload.permission.every((permission) => typeof permission === 'string') &&
+    typeof payload.full_name === 'string' &&
+    payload.full_name.length > 0 &&
+    typeof payload.email === 'string' &&
+    payload.email.length > 0 &&
+    Array.isArray(payload.units) &&
+    payload.units.every((unit) => typeof unit === 'string') &&
+    typeof payload.must_change_password === 'boolean'
   );
 };
 
