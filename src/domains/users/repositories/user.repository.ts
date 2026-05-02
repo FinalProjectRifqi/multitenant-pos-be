@@ -66,8 +66,13 @@ export interface IUserRepository {
   findActiveUserUnits(userId: string): Promise<{ unit_id: string }[]>;
   create(data: CreateUserData): Promise<{ user_id: string; username: string }>;
   createUserUnit(userId: string, unitId: string): Promise<void>;
+  createWithUnit(
+    data: CreateUserData,
+    unitId: string,
+  ): Promise<{ user_id: string; username: string }>;
   update(id: string, data: UpdateUserData): Promise<void>;
   revokeUserUnits(userId: string): Promise<void>;
+  replaceUserUnit(userId: string, unitId: string): Promise<void>;
   softDelete(id: string): Promise<void>;
   softDeleteUserUnits(userId: string): Promise<void>;
 }
@@ -227,9 +232,7 @@ export class UserRepository implements IUserRepository {
     const row = await this.db('users')
       .select(
         this.db.raw('COUNT(*) AS total_users'),
-        this.db.raw(
-          'COUNT(*) FILTER (WHERE is_active = true) AS users_active',
-        ),
+        this.db.raw('COUNT(*) FILTER (WHERE is_active = true) AS users_active'),
         this.db.raw(
           'COUNT(*) FILTER (WHERE is_active = false) AS users_inactive',
         ),
@@ -338,6 +341,39 @@ export class UserRepository implements IUserRepository {
     });
   }
 
+  async createWithUnit(
+    data: CreateUserData,
+    unitId: string,
+  ): Promise<{ user_id: string; username: string }> {
+    return this.db.transaction(async (trx) => {
+      const [row] = await trx('users')
+        .insert({
+          role_id: data.role_id,
+          full_name: data.full_name,
+          username: data.username,
+          email: data.email,
+          password: data.password,
+          is_active: data.is_active,
+          must_change_password: data.must_change_password,
+          last_login_at: trx.fn.now(),
+          created_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+        })
+        .returning(['user_id', 'username']);
+
+      await trx('user_units').insert({
+        user_id: row.user_id,
+        unit_id: unitId,
+        assigned_at: trx.fn.now(),
+        revoked_at: null,
+        created_at: trx.fn.now(),
+        updated_at: trx.fn.now(),
+      });
+
+      return row as { user_id: string; username: string };
+    });
+  }
+
   async update(id: string, data: UpdateUserData): Promise<void> {
     const payload: Record<string, unknown> = {
       updated_at: this.db.fn.now(),
@@ -366,14 +402,33 @@ export class UserRepository implements IUserRepository {
       });
   }
 
-  async softDelete(id: string): Promise<void> {
-    await this.db('users')
-      .where('user_id', id)
-      .whereNull('deleted_at')
-      .update({
-        deleted_at: this.db.fn.now(),
-        updated_at: this.db.fn.now(),
+  async replaceUserUnit(userId: string, unitId: string): Promise<void> {
+    await this.db.transaction(async (trx) => {
+      await trx('user_units')
+        .where('user_id', userId)
+        .whereNull('deleted_at')
+        .update({
+          deleted_at: trx.fn.now(),
+          revoked_at: trx.fn.now(),
+          updated_at: trx.fn.now(),
+        });
+
+      await trx('user_units').insert({
+        user_id: userId,
+        unit_id: unitId,
+        assigned_at: trx.fn.now(),
+        revoked_at: null,
+        created_at: trx.fn.now(),
+        updated_at: trx.fn.now(),
       });
+    });
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.db('users').where('user_id', id).whereNull('deleted_at').update({
+      deleted_at: this.db.fn.now(),
+      updated_at: this.db.fn.now(),
+    });
   }
 
   async softDeleteUserUnits(userId: string): Promise<void> {

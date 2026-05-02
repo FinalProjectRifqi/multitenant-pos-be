@@ -191,7 +191,11 @@ describe('User routes auth matrix', () => {
 
   it('allows POST when user has user:read, user:create, and unit:assign_user', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: createValidPayload(['user:read', 'user:create', 'unit:assign_user']),
+      payload: createValidPayload([
+        'user:read',
+        'user:create',
+        'unit:assign_user',
+      ]),
     });
     const app = createApp();
 
@@ -228,7 +232,11 @@ describe('User routes auth matrix', () => {
 
   it('allows PATCH when user has user:read, user:update, and unit:assign_user', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
-      payload: createValidPayload(['user:read', 'user:update', 'unit:assign_user']),
+      payload: createValidPayload([
+        'user:read',
+        'user:update',
+        'unit:assign_user',
+      ]),
     });
     const app = createApp();
 

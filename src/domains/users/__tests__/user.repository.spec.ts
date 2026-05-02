@@ -134,7 +134,9 @@ describe('UserRepository', () => {
       expect(result.total).toBe(5);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].business_units).toHaveLength(1);
-      expect(result.data[0].business_units[0].business_unit_name).toBe('Toko A');
+      expect(result.data[0].business_units[0].business_unit_name).toBe(
+        'Toko A',
+      );
     });
 
     it('returns empty data and skips unit query when no users found', async () => {
@@ -285,6 +287,95 @@ describe('UserRepository', () => {
     });
   });
 
+  describe('createWithUnit', () => {
+    it('creates user and unit assignment in one transaction', async () => {
+      const trxUserBuilder = createBuilder();
+      trxUserBuilder.returning.mockResolvedValueOnce([
+        { user_id: VALID_UUID, username: 'budi.santoso' },
+      ]);
+
+      const trxUnitBuilder = createBuilder();
+      trxUnitBuilder.insert.mockResolvedValueOnce(undefined);
+
+      const trx = jest.fn().mockImplementation((table: string) => {
+        if (table === 'users') return trxUserBuilder;
+        return trxUnitBuilder;
+      });
+      (trx as unknown as { fn: { now: jest.Mock } }).fn = {
+        now: jest.fn().mockReturnValue('NOW()'),
+      };
+
+      const db = jest.fn() as unknown as Knex;
+      (db as unknown as { transaction: jest.Mock }).transaction = jest.fn(
+        async (callback: (trxArg: typeof trx) => Promise<unknown>) =>
+          callback(trx),
+      );
+
+      const repository = new UserRepository(db);
+      const result = await repository.createWithUnit(
+        {
+          role_id: VALID_UUID_2,
+          full_name: 'Budi Santoso',
+          username: 'budi.santoso',
+          email: 'budi@example.com',
+          password: 'hashed',
+          is_active: true,
+          must_change_password: true,
+        },
+        VALID_UUID,
+      );
+
+      expect(result).toEqual({ user_id: VALID_UUID, username: 'budi.santoso' });
+      expect(
+        (db as unknown as { transaction: jest.Mock }).transaction,
+      ).toHaveBeenCalled();
+      expect(trx).toHaveBeenCalledWith('users');
+      expect(trx).toHaveBeenCalledWith('user_units');
+    });
+
+    it('propagates error to trigger rollback when unit assignment fails', async () => {
+      const trxUserBuilder = createBuilder();
+      trxUserBuilder.returning.mockResolvedValueOnce([
+        { user_id: VALID_UUID, username: 'budi.santoso' },
+      ]);
+
+      const trxUnitBuilder = createBuilder();
+      trxUnitBuilder.insert.mockRejectedValueOnce(
+        new Error('insert user_units failed'),
+      );
+
+      const trx = jest.fn().mockImplementation((table: string) => {
+        if (table === 'users') return trxUserBuilder;
+        return trxUnitBuilder;
+      });
+      (trx as unknown as { fn: { now: jest.Mock } }).fn = {
+        now: jest.fn().mockReturnValue('NOW()'),
+      };
+
+      const db = jest.fn() as unknown as Knex;
+      (db as unknown as { transaction: jest.Mock }).transaction = jest.fn(
+        async (callback: (trxArg: typeof trx) => Promise<unknown>) =>
+          callback(trx),
+      );
+
+      const repository = new UserRepository(db);
+      await expect(
+        repository.createWithUnit(
+          {
+            role_id: VALID_UUID_2,
+            full_name: 'Budi Santoso',
+            username: 'budi.santoso',
+            email: 'budi@example.com',
+            password: 'hashed',
+            is_active: true,
+            must_change_password: true,
+          },
+          VALID_UUID,
+        ),
+      ).rejects.toThrow('insert user_units failed');
+    });
+  });
+
   describe('softDelete', () => {
     it('updates deleted_at and updated_at for the given user_id', async () => {
       const builder = createBuilder();
@@ -325,6 +416,44 @@ describe('UserRepository', () => {
           deleted_at: 'NOW()',
           revoked_at: 'NOW()',
         }),
+      );
+    });
+  });
+
+  describe('replaceUserUnit', () => {
+    it('revokes active units and inserts new unit in one transaction', async () => {
+      const trxUpdateBuilder = createBuilder();
+      trxUpdateBuilder.update.mockResolvedValueOnce(1);
+
+      const trxInsertBuilder = createBuilder();
+      trxInsertBuilder.insert.mockResolvedValueOnce(undefined);
+
+      let userUnitsCallCount = 0;
+      const trx = jest.fn().mockImplementation((table: string) => {
+        if (table === 'user_units') {
+          userUnitsCallCount += 1;
+          return userUnitsCallCount === 1 ? trxUpdateBuilder : trxInsertBuilder;
+        }
+        return trxInsertBuilder;
+      });
+      (trx as unknown as { fn: { now: jest.Mock } }).fn = {
+        now: jest.fn().mockReturnValue('NOW()'),
+      };
+
+      const db = jest.fn() as unknown as Knex;
+      (db as unknown as { transaction: jest.Mock }).transaction = jest.fn(
+        async (callback: (trxArg: typeof trx) => Promise<unknown>) =>
+          callback(trx),
+      );
+
+      const repository = new UserRepository(db);
+      await repository.replaceUserUnit(VALID_UUID, VALID_UUID_2);
+
+      expect(trxUpdateBuilder.update).toHaveBeenCalledWith(
+        expect.objectContaining({ deleted_at: 'NOW()', revoked_at: 'NOW()' }),
+      );
+      expect(trxInsertBuilder.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: VALID_UUID, unit_id: VALID_UUID_2 }),
       );
     });
   });

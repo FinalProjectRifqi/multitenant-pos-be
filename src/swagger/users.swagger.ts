@@ -372,7 +372,8 @@ export const usersSwaggerDoc = {
                     minLength: 8,
                     maxLength: 255,
                     example: 'password123',
-                    description: 'Password pengguna (wajib, minimal 8 karakter)',
+                    description:
+                      'Password pengguna (wajib, minimal 8 karakter)',
                   },
                 },
               },
@@ -638,10 +639,7 @@ export const usersSwaggerDoc = {
                         code: {
                           type: 'string',
                           example: 'USER_SELF_DEACTIVATE',
-                          enum: [
-                            'VALIDATION_FAILED',
-                            'USER_SELF_DEACTIVATE',
-                          ],
+                          enum: ['VALIDATION_FAILED', 'USER_SELF_DEACTIVATE'],
                         },
                         message: {
                           type: 'string',

@@ -26,8 +26,10 @@ const createMockRepository = (): jest.Mocked<IUserRepository> => ({
   findActiveUserUnits: jest.fn(),
   create: jest.fn(),
   createUserUnit: jest.fn(),
+  createWithUnit: jest.fn(),
   update: jest.fn(),
   revokeUserUnits: jest.fn(),
+  replaceUserUnit: jest.fn(),
   softDelete: jest.fn(),
   softDeleteUserUnits: jest.fn(),
 });
@@ -94,7 +96,12 @@ describe('UserService', () => {
       expect(result.statusCode).toBe(200);
       expect(result.data).toHaveLength(1);
       expect(result.data[0].user_name).toBe('budi.santoso');
-      expect(result.meta).toEqual({ page: 1, limit: 10, total: 1, totalPages: 1 });
+      expect(result.meta).toEqual({
+        page: 1,
+        limit: 10,
+        total: 1,
+        totalPages: 1,
+      });
     });
 
     it('uses defaults page=1, limit=10, sortBy=full_name, sortType=ASC when not provided', async () => {
@@ -134,7 +141,10 @@ describe('UserService', () => {
 
     it('maps is_active to status string in response', async () => {
       const inactiveUser = createUserWithDetails({ is_active: false });
-      mockRepository.findAll.mockResolvedValueOnce({ data: [inactiveUser], total: 1 });
+      mockRepository.findAll.mockResolvedValueOnce({
+        data: [inactiveUser],
+        total: 1,
+      });
 
       const result = await service.listUsers({});
 
@@ -200,7 +210,7 @@ describe('UserService', () => {
       mockRepository.findByEmail.mockResolvedValue(null);
       mockRepository.findRoleById.mockResolvedValue({ role_id: VALID_UUID_2 });
       mockRepository.findUnitById.mockResolvedValue({ unit_id: VALID_UUID });
-      mockRepository.create.mockResolvedValue({
+      mockRepository.createWithUnit.mockResolvedValue({
         user_id: VALID_UUID,
         username: 'budi.santoso',
       });
@@ -219,21 +229,28 @@ describe('UserService', () => {
     it('stores hashed password, not plain text', async () => {
       await service.createUser(validDto);
 
-      expect(mockRepository.create).toHaveBeenCalledWith(
+      expect(mockRepository.createWithUnit).toHaveBeenCalledWith(
         expect.objectContaining({ password: 'hashed-password' }),
+        VALID_UUID,
       );
     });
 
     it('sets is_active=true and must_change_password=true on create', async () => {
       await service.createUser(validDto);
 
-      expect(mockRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({ is_active: true, must_change_password: true }),
+      expect(mockRepository.createWithUnit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          is_active: true,
+          must_change_password: true,
+        }),
+        VALID_UUID,
       );
     });
 
     it('throws 409 USER_USERNAME_CONFLICT when username already exists', async () => {
-      mockRepository.findByUsername.mockResolvedValueOnce({ user_id: VALID_UUID });
+      mockRepository.findByUsername.mockResolvedValueOnce({
+        user_id: VALID_UUID,
+      });
 
       await expect(service.createUser(validDto)).rejects.toMatchObject({
         code: DomainErrorCodes.UserUsernameConflict,
@@ -268,21 +285,49 @@ describe('UserService', () => {
       });
     });
 
-    it('calls createUserUnit after creating user', async () => {
+    it('creates user and unit assignment in single transactional call', async () => {
       await service.createUser(validDto);
 
-      expect(mockRepository.createUserUnit).toHaveBeenCalledWith(
-        VALID_UUID,
+      expect(mockRepository.createWithUnit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          username: 'budi.santoso',
+        }),
         VALID_UUID,
       );
     });
 
     it('throws 500 on unexpected error', async () => {
-      mockRepository.create.mockRejectedValueOnce(new Error('DB error'));
+      mockRepository.createWithUnit.mockRejectedValueOnce(
+        new Error('DB error'),
+      );
 
       await expect(service.createUser(validDto)).rejects.toMatchObject({
         code: ErrorCodes.Internal,
         status: 500,
+      });
+    });
+
+    it('maps DB unique violation on username to 409 USER_USERNAME_CONFLICT', async () => {
+      mockRepository.createWithUnit.mockRejectedValueOnce({
+        code: '23505',
+        constraint: 'users_username_unique',
+      });
+
+      await expect(service.createUser(validDto)).rejects.toMatchObject({
+        code: DomainErrorCodes.UserUsernameConflict,
+        status: 409,
+      });
+    });
+
+    it('maps DB unique violation on email to 409 USER_EMAIL_CONFLICT', async () => {
+      mockRepository.createWithUnit.mockRejectedValueOnce({
+        code: '23505',
+        detail: 'Key (email)=(budi@example.com) already exists.',
+      });
+
+      await expect(service.createUser(validDto)).rejects.toMatchObject({
+        code: DomainErrorCodes.UserEmailConflict,
+        status: 409,
       });
     });
   });
@@ -336,7 +381,10 @@ describe('UserService', () => {
       mockRepository.findRoleById.mockResolvedValue({ role_id: VALID_UUID_2 });
       mockRepository.findUnitById.mockResolvedValue({ unit_id: VALID_UUID });
       mockRepository.update.mockResolvedValue();
-      mockRepository.findActiveUserUnits.mockResolvedValue([{ unit_id: VALID_UUID }]);
+      mockRepository.findActiveUserUnits.mockResolvedValue([
+        { unit_id: VALID_UUID },
+      ]);
+      mockRepository.replaceUserUnit.mockResolvedValue();
     });
 
     it('returns 200 on successful partial update', async () => {
@@ -394,7 +442,9 @@ describe('UserService', () => {
     });
 
     it('throws 409 USER_USERNAME_CONFLICT when new username is taken by another user', async () => {
-      mockRepository.findByUsername.mockResolvedValueOnce({ user_id: VALID_UUID_2 });
+      mockRepository.findByUsername.mockResolvedValueOnce({
+        user_id: VALID_UUID_2,
+      });
 
       await expect(
         service.updateUser(VALID_UUID, { user_name: 'taken' }, REQUEST_USER_ID),
@@ -417,7 +467,9 @@ describe('UserService', () => {
     });
 
     it('revokes old unit and creates new when business_unit_id changes', async () => {
-      mockRepository.findActiveUserUnits.mockResolvedValueOnce([{ unit_id: VALID_UUID }]);
+      mockRepository.findActiveUserUnits.mockResolvedValueOnce([
+        { unit_id: VALID_UUID },
+      ]);
 
       await service.updateUser(
         VALID_UUID,
@@ -425,15 +477,16 @@ describe('UserService', () => {
         REQUEST_USER_ID,
       );
 
-      expect(mockRepository.revokeUserUnits).toHaveBeenCalledWith(VALID_UUID);
-      expect(mockRepository.createUserUnit).toHaveBeenCalledWith(
+      expect(mockRepository.replaceUserUnit).toHaveBeenCalledWith(
         VALID_UUID,
         VALID_UUID_2,
       );
     });
 
     it('skips revoke/create when business_unit_id is same as current active unit', async () => {
-      mockRepository.findActiveUserUnits.mockResolvedValueOnce([{ unit_id: VALID_UUID }]);
+      mockRepository.findActiveUserUnits.mockResolvedValueOnce([
+        { unit_id: VALID_UUID },
+      ]);
 
       await service.updateUser(
         VALID_UUID,
@@ -441,7 +494,7 @@ describe('UserService', () => {
         REQUEST_USER_ID,
       );
 
-      expect(mockRepository.revokeUserUnits).not.toHaveBeenCalled();
+      expect(mockRepository.replaceUserUnit).not.toHaveBeenCalled();
       expect(mockRepository.createUserUnit).not.toHaveBeenCalled();
     });
 
@@ -454,11 +507,29 @@ describe('UserService', () => {
         REQUEST_USER_ID,
       );
 
-      expect(mockRepository.revokeUserUnits).not.toHaveBeenCalled();
+      expect(mockRepository.replaceUserUnit).not.toHaveBeenCalled();
       expect(mockRepository.createUserUnit).toHaveBeenCalledWith(
         VALID_UUID,
         VALID_UUID_2,
       );
+    });
+
+    it('maps DB unique violation during update to 409 conflict', async () => {
+      mockRepository.update.mockRejectedValueOnce({
+        code: '23505',
+        constraint: 'users_email_unique',
+      });
+
+      await expect(
+        service.updateUser(
+          VALID_UUID,
+          { email: 'another@example.com' },
+          REQUEST_USER_ID,
+        ),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.UserEmailConflict,
+        status: 409,
+      });
     });
 
     it('throws 500 on unexpected error', async () => {
@@ -489,7 +560,9 @@ describe('UserService', () => {
       expect(result.success).toBe(true);
       expect(result.statusCode).toBe(200);
       expect(mockRepository.softDelete).toHaveBeenCalledWith(VALID_UUID);
-      expect(mockRepository.softDeleteUserUnits).toHaveBeenCalledWith(VALID_UUID);
+      expect(mockRepository.softDeleteUserUnits).toHaveBeenCalledWith(
+        VALID_UUID,
+      );
     });
 
     it('throws 400 USER_SELF_DELETE when user tries to delete themselves', async () => {

@@ -36,6 +36,8 @@ export class UserService {
     private readonly logger: Logger,
   ) {}
 
+  private static readonly PG_UNIQUE_VIOLATION = '23505';
+
   async listUsers(query: ListUsersQueryDto): Promise<UserListResponse> {
     try {
       const page = query.page ?? 1;
@@ -175,17 +177,18 @@ export class UserService {
         this.config.bcryptSaltRounds,
       );
 
-      const { user_id, username } = await this.repository.create({
-        role_id: dto.role_id,
-        full_name: dto.full_name,
-        username: dto.user_name,
-        email: dto.email,
-        password: hashedPassword,
-        is_active: true,
-        must_change_password: true,
-      });
-
-      await this.repository.createUserUnit(user_id, dto.business_unit_id);
+      const { user_id, username } = await this.repository.createWithUnit(
+        {
+          role_id: dto.role_id,
+          full_name: dto.full_name,
+          username: dto.user_name,
+          email: dto.email,
+          password: hashedPassword,
+          is_active: true,
+          must_change_password: true,
+        },
+        dto.business_unit_id,
+      );
 
       this.logger.info({ userId: user_id }, 'User created successfully');
 
@@ -202,6 +205,11 @@ export class UserService {
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
+      }
+
+      const conflictError = this.mapDatabaseConflictError(error);
+      if (conflictError) {
+        throw conflictError;
       }
 
       this.logger.error({ err: error }, 'Unexpected error while creating user');
@@ -349,9 +357,10 @@ export class UserService {
 
         if (!currentUnitIds.includes(dto.business_unit_id)) {
           if (activeUnits.length > 0) {
-            await this.repository.revokeUserUnits(id);
+            await this.repository.replaceUserUnit(id, dto.business_unit_id);
+          } else {
+            await this.repository.createUserUnit(id, dto.business_unit_id);
           }
-          await this.repository.createUserUnit(id, dto.business_unit_id);
         }
       }
 
@@ -368,6 +377,11 @@ export class UserService {
     } catch (error) {
       if (error instanceof AppError) {
         throw error;
+      }
+
+      const conflictError = this.mapDatabaseConflictError(error);
+      if (conflictError) {
+        throw conflictError;
       }
 
       this.logger.error(
@@ -443,5 +457,34 @@ export class UserService {
       last_login: user.last_login_at,
       business_units: user.business_units,
     };
+  }
+
+  private mapDatabaseConflictError(error: unknown): AppError | null {
+    const pgError = error as {
+      code?: string;
+      constraint?: string;
+      detail?: string;
+      message?: string;
+    };
+
+    if (pgError?.code !== UserService.PG_UNIQUE_VIOLATION) {
+      return null;
+    }
+
+    const loweredContext =
+      `${pgError.constraint ?? ''} ${pgError.detail ?? ''} ${pgError.message ?? ''}`.toLowerCase();
+    if (loweredContext.includes('username')) {
+      return userUsernameConflictError();
+    }
+
+    if (loweredContext.includes('email')) {
+      return userEmailConflictError();
+    }
+
+    return new AppError({
+      code: ErrorCodes.ValidationFailed,
+      message: 'Data pengguna sudah digunakan',
+      status: 409,
+    });
   }
 }
