@@ -9,6 +9,7 @@ export const DomainErrorCodes = {
   AuthForbidden: 'AUTH_FORBIDDEN',
   UnitNotFound: 'UNIT_NOT_FOUND',
   UnitInvalidPhone: 'UNIT_INVALID_PHONE',
+  RoleNotFound: 'ROLE_NOT_FOUND',
 } as const;
 
 export type DomainErrorCode =

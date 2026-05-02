@@ -5,6 +5,7 @@ import type { AppConfig } from '../config';
 import { buildHealthRouter } from './health.routes';
 import { buildAuthRouter } from '../domains/auth/auth';
 import { buildBusinessUnitRouter } from '../domains/business-units/business-unit';
+import { buildRoleRouter } from '../domains/roles/role.routes';
 
 export type { RequirePermissionFactory } from '../common/middlewares/require-permission';
 export { buildPermissionMiddleware } from '../common/middlewares/require-permission';
@@ -28,6 +29,7 @@ export const buildApiRouter = ({
     '/business-units',
     buildBusinessUnitRouter({ knex, config, logger }),
   );
+  router.use('/roles', buildRoleRouter({ knex, config, logger }));
 
   return router;
 };
