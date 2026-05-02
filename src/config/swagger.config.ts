@@ -7,6 +7,7 @@ import { healthSwaggerDoc } from '../swagger/health.swagger';
 import { ordersSwaggerDoc } from '../swagger/orders.swagger';
 import { authSwaggerDoc } from '../swagger/auth.swagger';
 import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
+import { usersSwaggerDoc } from '../swagger/users.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -67,6 +68,7 @@ const buildOpenApiDocument = () => {
     ordersSwaggerDoc,
     authSwaggerDoc,
     businessUnitsSwaggerDoc,
+    usersSwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 

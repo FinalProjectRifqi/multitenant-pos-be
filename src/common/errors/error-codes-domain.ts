@@ -9,6 +9,12 @@ export const DomainErrorCodes = {
   AuthForbidden: 'AUTH_FORBIDDEN',
   UnitNotFound: 'UNIT_NOT_FOUND',
   UnitInvalidPhone: 'UNIT_INVALID_PHONE',
+  UserNotFound: 'USER_NOT_FOUND',
+  UserUsernameConflict: 'USER_USERNAME_CONFLICT',
+  UserEmailConflict: 'USER_EMAIL_CONFLICT',
+  UserSelfDelete: 'USER_SELF_DELETE',
+  UserSelfDeactivate: 'USER_SELF_DEACTIVATE',
+  RoleNotFound: 'ROLE_NOT_FOUND',
 } as const;
 
 export type DomainErrorCode =
