@@ -1,5 +1,5 @@
-import { ListRoleQueryDto } from './dto/list-role-query.dto';
 import type { Request, Response } from 'express';
+import { ListRoleQueryDto } from './dto/list-role-query.dto';
 import { RoleService } from './role.service';
 
 export class RoleController {

@@ -85,7 +85,6 @@ describe('RoleRepository', () => {
     expect(result.total).toBe(7);
     expect(dataBuilder.limit).toHaveBeenCalledWith(3);
     expect(dataBuilder.offset).toHaveBeenCalledWith(3);
-    // expect(dataBuilder.where).toHaveBeenCalledWith('status', 'active');
   });
 
   it('findAll applies search to name when provided', async () => {
@@ -110,67 +109,4 @@ describe('RoleRepository', () => {
 
     expect(dataBuilder.whereILike).toHaveBeenCalledWith('role_name', '%maju%');
   });
-
-  // it('getStats converts aggregate values into numbers', async () => {
-  //   const builder = createBuilder();
-  //   builder.first.mockResolvedValueOnce({
-  //     total_business_unit: '10',
-  //     business_unit_active: '8',
-  //     business_unit_inactive: '2',
-  //   });
-
-  //   const dbFunction = jest.fn().mockReturnValue(builder);
-  //   const raw = jest.fn((sql: string) => sql);
-
-  //   const db = Object.assign(dbFunction, { raw }) as unknown as Knex;
-  //   const repository = new RoleRepository(db);
-
-  //   const stats = await repository.getStats();
-
-  //   expect(stats).toEqual({
-  //     total_business_unit: 10,
-  //     business_unit_active: 8,
-  //     business_unit_inactive: 2,
-  //   });
-  // });
-
-  // it('update sends only defined fields and returns updated row', async () => {
-  //   const updatedRow = {
-  //     unit_id: '550e8400-e29b-41d4-a716-446655440000',
-  //     unit_name: 'Nama Baru',
-  //     unit_address: 'Alamat Lama',
-  //     phone_number: '081234567890',
-  //     status: 'active',
-  //     created_at: new Date(),
-  //     updated_at: new Date(),
-  //     deleted_at: null,
-  //   };
-
-  //   const builder = createBuilder();
-  //   builder.returning.mockResolvedValueOnce([updatedRow]);
-
-  //   const dbFunction = jest.fn().mockReturnValue(builder);
-  //   const now = jest.fn(() => new Date('2026-01-01T00:00:00.000Z'));
-  //   const db = Object.assign(dbFunction, { fn: { now } }) as unknown as Knex;
-
-  //   const repository = new RoleRepository(db);
-
-  //   const result = await repository.update(updatedRow.role_id, {
-  //     role_name: 'Nama Baru',
-  //   });
-
-  //   expect(result).toEqual(updatedRow);
-  //   expect(builder.update).toHaveBeenCalledWith(
-  //     expect.objectContaining({
-  //       role_name: 'Nama Baru',
-  //     }),
-  //   );
-  //   expect(builder.update).toHaveBeenCalledWith(
-  //     expect.not.objectContaining({
-  //       unit_address: expect.anything(),
-  //       phone_number: expect.anything(),
-  //       status: expect.anything(),
-  //     }),
-  //   );
-  // });
 });

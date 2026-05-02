@@ -1,20 +1,15 @@
-import 'reflect-metadata';
 import express from 'express';
-import request from 'supertest';
 import type { Knex } from 'knex';
 import type { Logger } from 'pino';
+import 'reflect-metadata';
+import request from 'supertest';
+import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
+import { createErrorHandler } from '../../../common/middlewares/error-handler';
 import type { AppConfig } from '../../../config';
 import { buildRoleRouter } from '../role';
-import { createErrorHandler } from '../../../common/middlewares/error-handler';
-import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
 
 const jwtVerifyMock = jest.fn();
 const listRolesMock = jest.fn();
-// const getBusinessUnitStatsMock = jest.fn();
-// const createBusinessUnitMock = jest.fn();
-// const getBusinessUnitByIdMock = jest.fn();
-// const updateBusinessUnitMock = jest.fn();
-// const deleteBusinessUnitMock = jest.fn();
 
 jest.mock('jose', () => {
   class JWTExpired extends Error {}
@@ -27,11 +22,6 @@ jest.mock('jose', () => {
 jest.mock('../role.controller', () => ({
   RoleController: jest.fn().mockImplementation(() => ({
     listRoles: listRolesMock,
-    // getRoleStats: getRoleStatsMock,
-    // createRole: createRoleMock,
-    // getRoleById: getRoleByIdMock,
-    // updateRole: updateRoleMock,
-    // deleteBusinessUnit: deleteBusinessUnitMock,
   })),
 }));
 
@@ -85,21 +75,6 @@ describe('Role routes auth matrix', () => {
     listRolesMock.mockImplementation(async (_req, res) =>
       res.status(200).json({ success: true }),
     );
-    // getBusinessUnitStatsMock.mockImplementation(async (_req, res) =>
-    //   res.status(200).json({ success: true }),
-    // );
-    // createBusinessUnitMock.mockImplementation(async (_req, res) =>
-    //   res.status(201).json({ success: true }),
-    // );
-    // getBusinessUnitByIdMock.mockImplementation(async (_req, res) =>
-    //   res.status(200).json({ success: true }),
-    // );
-    // updateBusinessUnitMock.mockImplementation(async (_req, res) =>
-    //   res.status(200).json({ success: true }),
-    // );
-    // deleteBusinessUnitMock.mockImplementation(async (_req, res) =>
-    //   res.status(200).json({ success: true }),
-    // );
   });
 
   it('rejects without token on read endpoint', async () => {
@@ -124,113 +99,241 @@ describe('Role routes auth matrix', () => {
     expect(res.status).toBe(200);
     expect(listRolesMock).toHaveBeenCalledTimes(1);
   });
+});
 
-  // it('allows GET /stats when user has unit:read only', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read']),
-  //   });
-  //   const app = createApp();
+// Tambahkan di bawah describe('Role routes auth matrix', ...) yang sudah ada
 
-  //   const res = await request(app)
-  //     .get('/business-units/stats')
-  //     .set('Authorization', 'Bearer valid-token');
+describe('Role routes — query validation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
 
-  //   expect(res.status).toBe(200);
-  //   expect(getBusinessUnitStatsMock).toHaveBeenCalledTimes(1);
-  // });
+    // Selalu mock JWT valid agar validation error tidak tertutup 401
+    jwtVerifyMock.mockResolvedValue({
+      payload: createValidPayload(['role:read']),
+    });
 
-  // it('rejects POST when user has only unit:create without unit:read', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:create']),
-  //   });
-  //   const app = createApp();
+    listRolesMock.mockImplementation(async (_req, res) =>
+      res.status(200).json({ success: true }),
+    );
+  });
 
-  //   const res = await request(app)
-  //     .post('/business-units')
-  //     .set('Authorization', 'Bearer valid-token')
-  //     .send({
-  //       business_unit_name: 'Toko A',
-  //       business_unit_address: 'Jakarta',
-  //     });
+  // ── Happy path ───────────────────────────────────────────────────────
 
-  //   expect(res.status).toBe(403);
-  //   expect(res.body.error.code).toBe(DomainErrorCodes.AuthForbidden);
-  // });
+  describe('valid query', () => {
+    it('200 — tanpa query params (default page & limit berlaku)', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles')
+        .set('Authorization', 'Bearer valid-token');
 
-  // it('allows POST when user has unit:read and unit:create', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read', 'unit:create']),
-  //   });
-  //   const app = createApp();
+      expect(res.status).toBe(200);
+      expect(listRolesMock).toHaveBeenCalledTimes(1);
+    });
 
-  //   const res = await request(app)
-  //     .post('/business-units')
-  //     .set('Authorization', 'Bearer valid-token')
-  //     .send({
-  //       business_unit_name: 'Toko A',
-  //       business_unit_address: 'Jakarta',
-  //     });
+    it('200 — page dan limit valid diteruskan ke controller', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=2&limit=25')
+        .set('Authorization', 'Bearer valid-token');
 
-  //   expect(res.status).toBe(201);
-  //   expect(createBusinessUnitMock).toHaveBeenCalledTimes(1);
-  // });
+      expect(res.status).toBe(200);
+      expect(listRolesMock).toHaveBeenCalledTimes(1);
+    });
 
-  // it('rejects PATCH when missing action permission even with unit:read', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read']),
-  //   });
-  //   const app = createApp();
+    it('200 — search dikirim bersama page & limit valid', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=10&search=admin')
+        .set('Authorization', 'Bearer valid-token');
 
-  //   const res = await request(app)
-  //     .patch('/business-units/550e8400-e29b-41d4-a716-446655440000')
-  //     .set('Authorization', 'Bearer valid-token')
-  //     .send({ business_unit_name: 'Baru' });
+      expect(res.status).toBe(200);
+    });
 
-  //   expect(res.status).toBe(403);
-  //   expect(res.body.error.code).toBe(DomainErrorCodes.AuthForbidden);
-  // });
+    it('200 — limit = 1 (batas bawah tepat)', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=1')
+        .set('Authorization', 'Bearer valid-token');
 
-  // it('allows PATCH when user has unit:read and unit:update', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read', 'unit:update']),
-  //   });
-  //   const app = createApp();
+      expect(res.status).toBe(200);
+    });
 
-  //   const res = await request(app)
-  //     .patch('/business-units/550e8400-e29b-41d4-a716-446655440000')
-  //     .set('Authorization', 'Bearer valid-token')
-  //     .send({ business_unit_name: 'Baru' });
+    it('200 — limit = 100 (batas atas tepat)', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=100')
+        .set('Authorization', 'Bearer valid-token');
 
-  //   expect(res.status).toBe(200);
-  //   expect(updateBusinessUnitMock).toHaveBeenCalledTimes(1);
-  // });
+      expect(res.status).toBe(200);
+    });
+  });
 
-  // it('allows DELETE when user has unit:read and unit:delete', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read', 'unit:delete']),
-  //   });
-  //   const app = createApp();
+  // ── page invalid ─────────────────────────────────────────────────────
 
-  //   const res = await request(app)
-  //     .delete('/business-units/550e8400-e29b-41d4-a716-446655440000')
-  //     .set('Authorization', 'Bearer valid-token');
+  describe('invalid page', () => {
+    it('400 — page bukan angka', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=abc&limit=10')
+        .set('Authorization', 'Bearer valid-token');
 
-  //   expect(res.status).toBe(200);
-  //   expect(deleteBusinessUnitMock).toHaveBeenCalledTimes(1);
-  // });
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
 
-  // it('returns 400 for invalid UUID params before controller runs', async () => {
-  //   jwtVerifyMock.mockResolvedValueOnce({
-  //     payload: createValidPayload(['unit:read']),
-  //   });
-  //   const app = createApp();
+    it('400 — page = 0', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=0&limit=10')
+        .set('Authorization', 'Bearer valid-token');
 
-  //   const res = await request(app)
-  //     .get('/business-units/not-a-uuid')
-  //     .set('Authorization', 'Bearer valid-token');
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
 
-  //   expect(res.status).toBe(400);
-  //   expect(res.body.error.code).toBe('VALIDATION_FAILED');
-  //   expect(getBusinessUnitByIdMock).not.toHaveBeenCalled();
-  // });
+    it('400 — page negatif', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=-1&limit=10')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — page float', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1.5&limit=10')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — page string kosong', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=&limit=10')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── limit invalid ────────────────────────────────────────────────────
+
+  describe('invalid limit', () => {
+    it('400 — limit bukan angka', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=xyz')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — limit = 0', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=0')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — limit negatif', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=-5')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — limit melebihi 100', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=101')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — limit float', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=2.5')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── multiple errors ──────────────────────────────────────────────────
+
+  describe('multiple invalid fields', () => {
+    it('400 — page dan limit invalid sekaligus', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=abc&limit=xyz')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 — page=0 dan limit=0 dilaporkan bersamaan', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=0&limit=0')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── interaksi auth + validation ──────────────────────────────────────
+
+  describe('auth dan validation bersamaan', () => {
+    it('401 diutamakan saat token tidak ada, meskipun query invalid', async () => {
+      // Validasi tidak boleh jalan sebelum auth — middleware order harus terjaga
+      const app = createApp();
+      const res = await request(app).get('/roles?page=abc&limit=xyz');
+      // Tidak ada Authorization header
+
+      expect(res.status).toBe(401);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('400 saat token valid tapi query invalid', async () => {
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=0&limit=abc')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(400);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+
+    it('403 saat token valid tapi permission kurang, query valid', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: createValidPayload([]), // tidak ada role:read
+      });
+      const app = createApp();
+      const res = await request(app)
+        .get('/roles?page=1&limit=10')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(403);
+      expect(listRolesMock).not.toHaveBeenCalled();
+    });
+  });
 });

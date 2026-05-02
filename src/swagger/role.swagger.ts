@@ -66,30 +66,6 @@ const forbiddenResponse = {
   },
 };
 
-const notFoundResponse = {
-  description: 'Peran tidak ditemukan',
-  content: {
-    'application/json': {
-      schema: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: false },
-          error: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', example: 'ROLE_NOT_FOUND' },
-              message: {
-                type: 'string',
-                example: 'Peran tidak ditemukan',
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-};
-
 const internalServerErrorResponse = {
   description: 'Kesalahan internal server',
   content: {
@@ -113,28 +89,6 @@ const internalServerErrorResponse = {
     },
   },
 };
-
-// const validationErrorResponse = {
-//   description: 'Validasi request gagal',
-//   content: {
-//     'application/json': {
-//       schema: {
-//         type: 'object',
-//         properties: {
-//           success: { type: 'boolean', example: false },
-//           error: {
-//             type: 'object',
-//             properties: {
-//               code: { type: 'string', example: 'VALIDATION_FAILED' },
-//               message: { type: 'string', example: 'Request validation failed' },
-//               details: { type: 'array', items: { type: 'object' } },
-//             },
-//           },
-//         },
-//       },
-//     },
-//   },
-// };
 
 const bearerSecurity = [{ bearerAuth: [] }];
 
@@ -218,7 +172,6 @@ export const roleSwaggerDoc = {
           },
           '401': unauthorizedResponse,
           '403': forbiddenResponse,
-          '404': notFoundResponse,
           '500': internalServerErrorResponse,
         },
       },

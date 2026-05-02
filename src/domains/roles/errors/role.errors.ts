@@ -8,11 +8,3 @@ export const roleNotFoundError = (details?: unknown): AppError =>
     status: 404,
     details,
   });
-
-// export const roleInvalidPhoneError = (details?: unknown): AppError =>
-//   new AppError({
-//     code: DomainErrorCodes.RoleInvalidPhone,
-//     message: 'Nomor telepon tidak valid',
-//     status: 400,
-//     details,
-//   });

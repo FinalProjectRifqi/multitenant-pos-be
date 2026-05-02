@@ -1,14 +1,14 @@
 import { Router } from 'express';
 import { Knex } from 'knex';
 import { Logger } from 'pino';
-import { AppConfig } from '../../config';
-import { buildPermissionMiddleware } from '../../routes/routes';
-import { RoleRepository } from './role';
 import { asyncHandler } from '../../common/middlewares/async-handler';
 import { validateRequest } from '../../common/middlewares/validate-request';
+import { AppConfig } from '../../config';
+import { buildPermissionMiddleware } from '../../routes/routes';
 import { ListRoleQueryDto } from './dto/list-role-query.dto';
-import { RoleService } from './role.service';
+import { RoleRepository } from './role';
 import { RoleController } from './role.controller';
+import { RoleService } from './role.service';
 
 interface BusinessUnitRouterDeps {
   knex: Knex;

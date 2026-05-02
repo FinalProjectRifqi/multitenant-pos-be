@@ -12,12 +12,6 @@ export interface RoleResponse {
   role_name: string;
 }
 
-// export interface RoleStats {
-//   total_business_unit: number;
-//   business_unit_active: number;
-//   business_unit_inactive: number;
-// }
-
 export interface PaginationMeta {
   page: number;
   limit: number;
@@ -39,13 +33,6 @@ export interface RoleDetailResponse {
   message: string;
   data: RoleResponse;
 }
-
-// export interface RoleStatsResponse {
-//   success: true;
-//   statusCode: number;
-//   message: string;
-//   data: RoleStats;
-// }
 
 export interface RoleDeleteResponse {
   success: true;
