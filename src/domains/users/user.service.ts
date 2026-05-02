@@ -9,6 +9,7 @@ import type { UpdateUserDto } from './dto/update-user.dto';
 import {
   roleNotFoundError,
   unitNotFoundForUserError,
+  userConflictError,
   userEmailConflictError,
   userNotFoundError,
   userSelfDeactivateError,
@@ -481,10 +482,6 @@ export class UserService {
       return userEmailConflictError();
     }
 
-    return new AppError({
-      code: ErrorCodes.ValidationFailed,
-      message: 'Data pengguna sudah digunakan',
-      status: 409,
-    });
+    return userConflictError();
   }
 }

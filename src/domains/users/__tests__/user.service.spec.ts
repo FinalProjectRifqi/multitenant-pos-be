@@ -330,6 +330,18 @@ describe('UserService', () => {
         status: 409,
       });
     });
+
+    it('maps unknown DB unique violation to 409 USER_CONFLICT', async () => {
+      mockRepository.createWithUnit.mockRejectedValueOnce({
+        code: '23505',
+        constraint: 'users_external_id_unique',
+      });
+
+      await expect(service.createUser(validDto)).rejects.toMatchObject({
+        code: DomainErrorCodes.UserConflict,
+        status: 409,
+      });
+    });
   });
 
   // ---------------------------------------------------------------------------

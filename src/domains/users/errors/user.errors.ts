@@ -23,6 +23,13 @@ export const userEmailConflictError = (): AppError =>
     status: 409,
   });
 
+export const userConflictError = (): AppError =>
+  new AppError({
+    code: DomainErrorCodes.UserConflict,
+    message: 'Data pengguna sudah digunakan',
+    status: 409,
+  });
+
 export const userSelfDeleteError = (): AppError =>
   new AppError({
     code: DomainErrorCodes.UserSelfDelete,
