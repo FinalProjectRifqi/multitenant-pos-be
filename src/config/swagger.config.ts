@@ -8,6 +8,7 @@ import { ordersSwaggerDoc } from '../swagger/orders.swagger';
 import { authSwaggerDoc } from '../swagger/auth.swagger';
 import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
 import { roleSwaggerDoc } from '../swagger/role.swagger';
+import { menusSwaggerDoc } from '../swagger/menus.swagger';
 import { usersSwaggerDoc } from '../swagger/users.swagger';
 import { menuCategorySwaggerDoc } from '../swagger/menu-categories.swagger';
 
@@ -72,6 +73,7 @@ const buildOpenApiDocument = () => {
     businessUnitsSwaggerDoc,
     roleSwaggerDoc,
     usersSwaggerDoc,
+    menusSwaggerDoc,
     menuCategorySwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);

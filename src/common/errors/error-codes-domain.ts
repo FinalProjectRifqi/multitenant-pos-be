@@ -24,6 +24,10 @@ export const DomainErrorCodes = {
   StorageUpdateFailed: 'STORAGE_UPDATE_FAILED',
   StorageSignedUrlFailed: 'STORAGE_SIGNED_URL_FAILED',
   StorageInvalidInput: 'STORAGE_INVALID_INPUT',
+  MenuNotFound: 'MENU_NOT_FOUND',
+  MenuConflict: 'MENU_CONFLICT',
+  MenuCategoryNotFound: 'MENU_CATEGORY_NOT_FOUND',
+  MenuInvalidImageType: 'MENU_INVALID_IMAGE_TYPE',
 } as const;
 
 export type DomainErrorCode =

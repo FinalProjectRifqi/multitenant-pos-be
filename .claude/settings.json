@@ -10,7 +10,9 @@
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(Get-ChildItem -Recurse -Depth 3)",
       "Bash(Select-Object Name)",
-      "Bash(grep -E \"\\\\.ts$\")"
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(Get-ChildItem -Path . -Directory)",
+      "Read(//mnt/c/Users/Nugraha Adhitama/Documents/project/skripsi-rifqi/multitenant-pos-be/**)"
     ]
   }
 }
