@@ -6,6 +6,7 @@ import { buildHealthRouter } from './health.routes';
 import { buildAuthRouter } from '../domains/auth/auth';
 import { buildBusinessUnitRouter } from '../domains/business-units/business-unit';
 import { buildRoleRouter } from '../domains/roles/role.routes';
+import { buildMenuRouter } from '../domains/menus/menus';
 import { buildUserRouter } from '../domains/users/user';
 
 export type { RequirePermissionFactory } from '../common/middlewares/require-permission';
@@ -32,6 +33,7 @@ export const buildApiRouter = ({
   );
   router.use('/roles', buildRoleRouter({ knex, config, logger }));
   router.use('/users', buildUserRouter({ knex, config, logger }));
+  router.use('/menus', buildMenuRouter({ knex, config, logger }));
 
   return router;
 };
