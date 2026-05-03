@@ -7,6 +7,7 @@ export const DomainErrorCodes = {
   AuthTokenExpired: 'AUTH_TOKEN_EXPIRED',
   AuthTokenInvalid: 'AUTH_TOKEN_INVALID',
   AuthForbidden: 'AUTH_FORBIDDEN',
+  MenuCategoryNotFound: 'MENU_CATEGORY_NOT_FOUND',
   UnitNotFound: 'UNIT_NOT_FOUND',
   UnitInvalidPhone: 'UNIT_INVALID_PHONE',
   UserNotFound: 'USER_NOT_FOUND',
@@ -25,7 +26,6 @@ export const DomainErrorCodes = {
   StorageInvalidInput: 'STORAGE_INVALID_INPUT',
   MenuNotFound: 'MENU_NOT_FOUND',
   MenuConflict: 'MENU_CONFLICT',
-  MenuCategoryNotFound: 'MENU_CATEGORY_NOT_FOUND',
   MenuInvalidImageType: 'MENU_INVALID_IMAGE_TYPE',
 } as const;
 
