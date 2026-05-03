@@ -102,9 +102,7 @@ export class StorageService {
         try {
           await this.retrySupabaseOperation(
             () =>
-              this.storageClient
-                .from(this.config.bucketName)
-                .remove([path]),
+              this.storageClient.from(this.config.bucketName).remove([path]),
             'upload-compensation',
           );
         } catch (compensateError) {
@@ -250,9 +248,7 @@ export class StorageService {
         try {
           await this.retrySupabaseOperation(
             () =>
-              this.storageClient
-                .from(this.config.bucketName)
-                .remove([newPath]),
+              this.storageClient.from(this.config.bucketName).remove([newPath]),
             'update-rollback',
           );
         } catch (rollbackError) {
@@ -271,9 +267,7 @@ export class StorageService {
       try {
         await this.retrySupabaseOperation(
           () =>
-            this.storageClient
-              .from(this.config.bucketName)
-              .remove([oldPath]),
+            this.storageClient.from(this.config.bucketName).remove([oldPath]),
           'delete-old-file',
         );
       } catch (deleteOldError) {
@@ -318,9 +312,7 @@ export class StorageService {
       try {
         await this.retrySupabaseOperation(
           () =>
-            this.storageClient
-              .from(this.config.bucketName)
-              .remove([row.path]),
+            this.storageClient.from(this.config.bucketName).remove([row.path]),
           'delete',
         );
       } catch (supabaseError) {
@@ -448,9 +440,13 @@ export class StorageService {
       const code = (error as NodeJS.ErrnoException).code;
       if (
         code &&
-        ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH', 'EAI_AGAIN'].includes(
-          code,
-        )
+        [
+          'ETIMEDOUT',
+          'ECONNRESET',
+          'ECONNREFUSED',
+          'ENETUNREACH',
+          'EAI_AGAIN',
+        ].includes(code)
       ) {
         return true;
       }

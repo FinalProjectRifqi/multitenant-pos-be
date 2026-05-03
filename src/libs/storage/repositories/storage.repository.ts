@@ -20,7 +20,10 @@ export interface UpdateLargeObjectData {
 export interface IStorageRepository {
   insert(data: CreateLargeObjectData): Promise<LargeObjectRow>;
   findById(idBlob: string): Promise<LargeObjectRow | null>;
-  updateById(idBlob: string, data: UpdateLargeObjectData): Promise<LargeObjectRow>;
+  updateById(
+    idBlob: string,
+    data: UpdateLargeObjectData,
+  ): Promise<LargeObjectRow>;
   softDeleteById(idBlob: string): Promise<void>;
   undoSoftDeleteById(idBlob: string): Promise<void>;
 }
