@@ -3,11 +3,13 @@ import {
   IsBoolean,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
   IsUUID,
   MaxLength,
   Min,
 } from 'class-validator';
+import { emptyToUndefined } from './transforms';
 
 export class CreateMenuDto {
   @IsString()
@@ -34,4 +36,9 @@ export class CreateMenuDto {
   })
   @IsBoolean({ message: 'is_available harus berupa boolean (true/false)' })
   is_available!: boolean;
+
+  /** Whitelist field multipart saat file kosong; file nyata tetap di req.file */
+  @IsOptional()
+  @Transform(emptyToUndefined)
+  menu_image?: unknown;
 }
