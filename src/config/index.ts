@@ -3,8 +3,9 @@ import type { NodeEnv } from './types';
 import { getDatabaseConfig, type DatabaseConfig } from './database.config';
 import { getLoggerConfig, type LoggerConfig } from './logger.config';
 import { getCorsConfig, type CorsConfig } from './cors.config';
+import { getStorageConfig, type StorageConfig } from './storage.config';
 
-export type { NodeEnv, DatabaseConfig, LoggerConfig, CorsConfig };
+export type { NodeEnv, DatabaseConfig, LoggerConfig, CorsConfig, StorageConfig };
 
 export interface JwtConfig {
   secret: string;
@@ -19,6 +20,7 @@ export interface AppConfig {
   cors: CorsConfig;
   jwt: JwtConfig;
   bcryptSaltRounds: number;
+  storage: StorageConfig;
   isLocalEnv: boolean;
   isDevelopmentEnv: boolean;
   isProductionEnv: boolean;
@@ -41,6 +43,7 @@ export const getAppConfig = (): AppConfig => {
   const database = getDatabaseConfig(nodeEnv);
   const logger = getLoggerConfig();
   const cors = getCorsConfig();
+  const storage = getStorageConfig();
 
   return {
     nodeEnv,
@@ -53,6 +56,7 @@ export const getAppConfig = (): AppConfig => {
       expiresIn: env.JWT_EXPIRES_IN,
     },
     bcryptSaltRounds: env.BCRYPT_SALT_ROUNDS,
+    storage,
     isLocalEnv: nodeEnv === 'local',
     isDevelopmentEnv: nodeEnv === 'development',
     isProductionEnv: nodeEnv === 'production',
