@@ -297,12 +297,12 @@ describe('StorageService', () => {
         error: new Error('token generation failed'),
       });
 
-      const assertion = expect(service.getFile(VALID_UUID)).rejects.toMatchObject(
-        {
-          code: DomainErrorCodes.StorageSignedUrlFailed,
-          status: 503,
-        },
-      );
+      const assertion = expect(
+        service.getFile(VALID_UUID),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageSignedUrlFailed,
+        status: 503,
+      });
       await jest.runAllTimersAsync();
       await assertion;
     });
@@ -532,12 +532,12 @@ describe('StorageService', () => {
       });
       mockRepository.undoSoftDeleteById.mockResolvedValue(undefined);
 
-      const assertion = expect(service.deleteFile(VALID_UUID)).rejects.toMatchObject(
-        {
-          code: DomainErrorCodes.StorageDeleteFailed,
-          status: 500,
-        },
-      );
+      const assertion = expect(
+        service.deleteFile(VALID_UUID),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageDeleteFailed,
+        status: 500,
+      });
       await jest.runAllTimersAsync();
       await assertion;
 
@@ -562,11 +562,11 @@ describe('StorageService', () => {
         new Error('rollback failed'),
       );
 
-      const assertion = expect(service.deleteFile(VALID_UUID)).rejects.toMatchObject(
-        {
-          code: DomainErrorCodes.StorageDeleteFailed,
-        },
-      );
+      const assertion = expect(
+        service.deleteFile(VALID_UUID),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageDeleteFailed,
+      });
       await jest.runAllTimersAsync();
       await assertion;
 
