@@ -4,7 +4,7 @@ import { Logger } from 'pino';
 import { asyncHandler } from '../../common/middlewares/async-handler';
 import { validateRequest } from '../../common/middlewares/validate-request';
 import { AppConfig } from '../../config';
-import { buildPermissionMiddleware } from '../../routes/routes';
+import { buildPermissionMiddleware } from '../../common/middlewares/require-permission';
 import { ListMenuCategoriesQueryDto } from './dto/list-menu-category-query.dto';
 import { MenuCategoryController } from './menu-category.controller';
 import { MenuCategoryService } from './menu-category.service';

@@ -112,7 +112,7 @@ export const menuCategorySwaggerDoc = {
         tags: ['Menu Categories'],
         summary: 'Ambil daftar kategori menu',
         description:
-          'Mengambil daftar kategori menu dengan dukungan pagination. Membutuhkan permission `menu-category:read`.',
+          'Mengambil daftar kategori menu dengan dukungan pagination. Membutuhkan permission `menu_category:read`.',
         security: bearerSecurity,
         parameters: [
           {
