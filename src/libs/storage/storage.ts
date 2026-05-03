@@ -1,5 +1,11 @@
 export { StorageService } from './storage.service';
 export { StorageRepository } from './repositories/storage.repository';
+export {
+  folderPrefixFromStoragePath,
+  normalizeAndValidateStorageFolder,
+  validateStorageFileName,
+  validateUploadLikePayload,
+} from './storage-input.validation';
 export type {
   IStorageRepository,
   CreateLargeObjectData,

@@ -22,6 +22,7 @@ export const DomainErrorCodes = {
   StorageDeleteFailed: 'STORAGE_DELETE_FAILED',
   StorageUpdateFailed: 'STORAGE_UPDATE_FAILED',
   StorageSignedUrlFailed: 'STORAGE_SIGNED_URL_FAILED',
+  StorageInvalidInput: 'STORAGE_INVALID_INPUT',
 } as const;
 
 export type DomainErrorCode =

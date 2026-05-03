@@ -20,6 +20,8 @@ describe('StorageService — Integration', () => {
   let service: StorageService;
   let db: Knex;
   const trackedBlobIds: string[] = [];
+  /** Set when the primary blob is soft-deleted so following tests do not depend on array order. */
+  let blobIdDeletedInPrimaryFlow: string | undefined;
 
   beforeAll(() => {
     const config = getAppConfig();
@@ -154,26 +156,15 @@ describe('StorageService — Integration', () => {
       expect(result.statusCode).toBe(200);
 
       trackedBlobIds.splice(trackedBlobIds.indexOf(idBlob), 1);
+      blobIdDeletedInPrimaryFlow = idBlob;
     });
 
     it('throws 404 when trying to get a deleted file', async () => {
-      const deletedIdBlob = trackedBlobIds[0];
+      expect(blobIdDeletedInPrimaryFlow).toBeDefined();
 
-      if (!deletedIdBlob) {
-        const row = await db('large_objects')
-          .whereNotNull('deleted_at')
-          .first<{ id_blob: string }>();
-
-        if (!row) return;
-
-        await expect(service.getFile(row.id_blob)).rejects.toMatchObject({
-          code: DomainErrorCodes.StorageBlobNotFound,
-          status: 404,
-        });
-        return;
-      }
-
-      await expect(service.getFile(deletedIdBlob)).rejects.toMatchObject({
+      await expect(
+        service.getFile(blobIdDeletedInPrimaryFlow!),
+      ).rejects.toMatchObject({
         code: DomainErrorCodes.StorageBlobNotFound,
         status: 404,
       });

@@ -1,4 +1,4 @@
-import type { StorageClient } from '@supabase/storage-js';
+import { StorageApiError, type StorageClient } from '@supabase/storage-js';
 import type { Logger } from 'pino';
 import { AppError } from '../../../common/errors/app-error';
 import { ErrorCodes } from '../../../common/errors/error-codes';
@@ -26,7 +26,7 @@ const createMockConfig = (): StorageConfig => ({
   signedUrlTtlSeconds: 21600,
 });
 
-const createMockLogger = (): jest.Mocked<Logger> =>
+const createMockLogger = () =>
   ({
     info: jest.fn(),
     warn: jest.fn(),
@@ -64,7 +64,7 @@ const createLargeObjectRow = (
   stored_name: VALID_UUID,
   mime: 'image/jpeg',
   path: `products/${VALID_UUID}.jpg`,
-  size_bytes: 102400,
+  size_bytes: JPEG_BUFFER.length,
   uploaded_at: new Date('2026-01-01T00:00:00.000Z'),
   deleted_at: null,
   ...overrides,
@@ -74,7 +74,7 @@ const validUploadDto: UploadFileDto = {
   file: JPEG_BUFFER,
   fileName: 'photo.jpg',
   mimeType: 'image/jpeg',
-  sizeBytes: 102400,
+  sizeBytes: JPEG_BUFFER.length,
   folder: 'products',
 };
 
@@ -82,7 +82,7 @@ const validUpdateDto: UpdateFileDto = {
   file: PNG_BUFFER,
   fileName: 'photo-updated.png',
   mimeType: 'image/png',
-  sizeBytes: 204800,
+  sizeBytes: PNG_BUFFER.length,
   folder: 'products',
 };
 
@@ -145,7 +145,7 @@ describe('StorageService', () => {
       expect(mockRepository.insert).toHaveBeenCalledTimes(1);
     });
 
-    it('logs INFO when folder is new (empty)', async () => {
+    it('logs DEBUG when prefix has no objects yet', async () => {
       const row = createLargeObjectRow();
       mockBucket.list.mockResolvedValue({ data: [], error: null });
       mockBucket.upload.mockResolvedValue({
@@ -156,16 +156,18 @@ describe('StorageService', () => {
 
       await service.uploadFile(validUploadDto);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        expect.objectContaining({ folder: 'products' }),
-        expect.stringContaining('New folder'),
+      expect(mockLogger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({ folderPrefix: 'products' }),
+        expect.stringContaining('No objects yet under this prefix'),
       );
     });
 
     it('throws storageFileTooLargeError when file exceeds max size', async () => {
+      const oversized = Buffer.alloc(mockConfig.maxFileSizeBytes + 1, 0);
       const dto: UploadFileDto = {
         ...validUploadDto,
-        sizeBytes: mockConfig.maxFileSizeBytes + 1,
+        file: oversized,
+        sizeBytes: oversized.length,
       };
 
       await expect(service.uploadFile(dto)).rejects.toMatchObject({
@@ -173,6 +175,46 @@ describe('StorageService', () => {
         status: 400,
       });
       expect(mockBucket.upload).not.toHaveBeenCalled();
+    });
+
+    it('throws storageInvalidInput when sizeBytes does not match buffer length', async () => {
+      await expect(
+        service.uploadFile({
+          ...validUploadDto,
+          sizeBytes: validUploadDto.sizeBytes + 1,
+        }),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageInvalidInput,
+        status: 400,
+      });
+      expect(mockBucket.upload).not.toHaveBeenCalled();
+    });
+
+    it('throws storageInvalidInput for unsafe folder', async () => {
+      await expect(
+        service.uploadFile({
+          ...validUploadDto,
+          folder: '../other-tenant',
+        }),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageInvalidInput,
+        status: 400,
+      });
+      expect(mockBucket.upload).not.toHaveBeenCalled();
+    });
+
+    it('does not retry when Supabase returns 403', async () => {
+      mockBucket.list.mockResolvedValue({ data: [], error: null });
+      mockBucket.upload.mockResolvedValue({
+        data: null,
+        error: new StorageApiError('Forbidden', 403, '403'),
+      });
+
+      await expect(service.uploadFile(validUploadDto)).rejects.toMatchObject({
+        code: DomainErrorCodes.StorageUploadFailed,
+        status: 503,
+      });
+      expect(mockBucket.upload).toHaveBeenCalledTimes(1);
     });
 
     it('throws storageUploadFailedError when Supabase upload fails after all retries', async () => {
@@ -333,7 +375,7 @@ describe('StorageService', () => {
       const existingRow = createLargeObjectRow();
       const updatedRow = createLargeObjectRow({
         mime: 'image/png',
-        size_bytes: 204800,
+        size_bytes: PNG_BUFFER.length,
         file_name: 'photo-updated.png',
       });
       mockRepository.findById.mockResolvedValue(existingRow);
@@ -387,9 +429,11 @@ describe('StorageService', () => {
       const row = createLargeObjectRow();
       mockRepository.findById.mockResolvedValue(row);
 
+      const oversized = Buffer.alloc(mockConfig.maxFileSizeBytes + 1, 0);
       const dto: UpdateFileDto = {
         ...validUpdateDto,
-        sizeBytes: mockConfig.maxFileSizeBytes + 1,
+        file: oversized,
+        sizeBytes: oversized.length,
       };
 
       await expect(service.updateFile(VALID_UUID, dto)).rejects.toMatchObject({

@@ -1,6 +1,13 @@
 import { AppError } from '../../../common/errors/app-error';
 import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
 
+export const storageInvalidInputError = (message: string): AppError =>
+  new AppError({
+    code: DomainErrorCodes.StorageInvalidInput,
+    message,
+    status: 400,
+  });
+
 export const storageBlobNotFoundError = (): AppError =>
   new AppError({
     code: DomainErrorCodes.StorageBlobNotFound,

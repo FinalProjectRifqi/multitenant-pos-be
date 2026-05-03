@@ -25,6 +25,10 @@ import type {
   IStorageRepository,
   UpdateLargeObjectData,
 } from './repositories/storage.repository';
+import {
+  folderPrefixFromStoragePath,
+  validateUploadLikePayload,
+} from './storage-input.validation';
 
 const MIME_TO_EXT: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -49,16 +53,18 @@ export class StorageService {
 
   async uploadFile(dto: UploadFileDto): Promise<UploadFileResult> {
     try {
+      const { folder, fileName } = validateUploadLikePayload(dto);
+
       const maxSizeMB = this.config.maxFileSizeBytes / (1024 * 1024);
       if (dto.sizeBytes > this.config.maxFileSizeBytes) {
         throw storageFileTooLargeError(maxSizeMB);
       }
 
-      const ext = this.extractExtension(dto.fileName, dto.mimeType);
+      const ext = this.extractExtension(fileName, dto.mimeType);
       const storedName = crypto.randomUUID();
-      const path = `${dto.folder}/${storedName}.${ext}`;
+      const path = `${folder}/${storedName}.${ext}`;
 
-      await this.checkFolder(dto.folder);
+      await this.checkFolderPrefix(folder);
 
       try {
         await this.retrySupabaseOperation(
@@ -73,12 +79,12 @@ export class StorageService {
       }
 
       this.logger.info(
-        { storedName, path, folder: dto.folder },
+        { storedName, path, folder },
         'File uploaded to storage',
       );
 
       const insertData: CreateLargeObjectData = {
-        file_name: dto.fileName,
+        file_name: fileName,
         stored_name: storedName,
         mime: dto.mimeType,
         path,
@@ -185,6 +191,8 @@ export class StorageService {
     dto: UpdateFileDto,
   ): Promise<UpdateFileResult> {
     try {
+      const { folder, fileName } = validateUploadLikePayload(dto);
+
       const existing = await this.repository.findById(idBlob);
 
       if (!existing || existing.deleted_at !== null) {
@@ -196,14 +204,14 @@ export class StorageService {
         throw storageFileTooLargeError(maxSizeMB);
       }
 
-      const ext = this.extractExtension(dto.fileName, dto.mimeType);
+      const ext = this.extractExtension(fileName, dto.mimeType);
       const newStoredName = crypto.randomUUID();
-      const newPath = `${dto.folder}/${newStoredName}.${ext}`;
+      const newPath = `${folder}/${newStoredName}.${ext}`;
       const oldPath = existing.path;
 
-      const oldFolder = existing.path.split('/')[0];
-      if (dto.folder !== oldFolder) {
-        await this.checkFolder(dto.folder);
+      const oldFolderPrefix = folderPrefixFromStoragePath(existing.path);
+      if (folder !== oldFolderPrefix) {
+        await this.checkFolderPrefix(folder);
       }
 
       try {
@@ -224,7 +232,7 @@ export class StorageService {
       );
 
       const updateData: UpdateLargeObjectData = {
-        file_name: dto.fileName,
+        file_name: fileName,
         stored_name: newStoredName,
         mime: dto.mimeType,
         path: newPath,
@@ -352,35 +360,41 @@ export class StorageService {
     }
   }
 
-  private async checkFolder(folder: string): Promise<void> {
+  /**
+   * Object storage has no real folders — paths are key prefixes. First write under a prefix
+   * implicitly "creates" it. We optionally list the prefix for diagnostics only.
+   */
+  private async checkFolderPrefix(folderPrefix: string): Promise<void> {
     try {
       const { data, error } = await this.storageClient
         .from(this.config.bucketName)
-        .list(folder);
+        .list(folderPrefix);
 
       if (error) {
         this.logger.warn(
-          { err: error, folder },
-          'Could not check folder existence — proceeding with upload',
+          { err: error, folderPrefix },
+          'Could not list storage prefix — proceeding with upload',
         );
         return;
       }
 
       if (!data || data.length === 0) {
-        this.logger.info({ folder }, 'New folder will be created in storage');
+        this.logger.debug(
+          { folderPrefix },
+          'No objects yet under this prefix; upload will use new object key',
+        );
       }
     } catch (err) {
       this.logger.warn(
-        { err, folder },
-        'Could not check folder existence — proceeding with upload',
+        { err, folderPrefix },
+        'Could not list storage prefix — proceeding with upload',
       );
     }
   }
 
   /**
    * Wraps a Supabase operation (which returns { data, error }) with exponential backoff retry.
-   * Handles both { data: null, error } responses and thrown exceptions.
-   * Throws on final failure so callers can convert to a specific AppError.
+   * Does not retry deterministic client errors (4xx except 408/429) or success with null data when error is set.
    */
   private async retrySupabaseOperation<TData>(
     operation: () => Promise<{ data: TData | null; error: unknown }>,
@@ -403,6 +417,10 @@ export class StorageService {
         lastError = thrownError;
       }
 
+      if (!this.shouldRetrySupabaseStorageError(lastError)) {
+        throw lastError;
+      }
+
       if (attempt <= maxRetries) {
         const delay = initialDelayMs * Math.pow(2, attempt - 1);
         this.logger.warn(
@@ -414,6 +432,31 @@ export class StorageService {
     }
 
     throw lastError;
+  }
+
+  /** Retries only likely-transient failures (5xx, 408, 429, network codes, unknown). */
+  private shouldRetrySupabaseStorageError(error: unknown): boolean {
+    const status = getSupabaseHttpStatus(error);
+    if (status !== undefined) {
+      if (status === 408 || status === 429) return true;
+      if (status >= 400 && status < 500) return false;
+      if (status >= 500) return true;
+      return false;
+    }
+
+    if (error instanceof Error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (
+        code &&
+        ['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENETUNREACH', 'EAI_AGAIN'].includes(
+          code,
+        )
+      ) {
+        return true;
+      }
+    }
+
+    return true;
   }
 
   private extractExtension(fileName: string, mimeType: string): string {
@@ -438,4 +481,16 @@ export class StorageService {
       uploaded_at: row.uploaded_at,
     };
   }
+}
+
+function getSupabaseHttpStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const e = error as Record<string, unknown>;
+  if (typeof e.status === 'number') return e.status;
+  if (typeof e.statusCode === 'number') return e.statusCode;
+  if (typeof e.statusCode === 'string') {
+    const n = Number.parseInt(e.statusCode, 10);
+    if (!Number.isNaN(n)) return n;
+  }
+  return undefined;
 }
