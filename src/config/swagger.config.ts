@@ -9,6 +9,7 @@ import { authSwaggerDoc } from '../swagger/auth.swagger';
 import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
 import { roleSwaggerDoc } from '../swagger/role.swagger';
 import { usersSwaggerDoc } from '../swagger/users.swagger';
+import { menuCategorySwaggerDoc } from '../swagger/menu-categories.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -71,6 +72,7 @@ const buildOpenApiDocument = () => {
     businessUnitsSwaggerDoc,
     roleSwaggerDoc,
     usersSwaggerDoc,
+    menuCategorySwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 

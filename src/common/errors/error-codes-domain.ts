@@ -7,6 +7,7 @@ export const DomainErrorCodes = {
   AuthTokenExpired: 'AUTH_TOKEN_EXPIRED',
   AuthTokenInvalid: 'AUTH_TOKEN_INVALID',
   AuthForbidden: 'AUTH_FORBIDDEN',
+  MenuCategoryNotFound: 'MENU_CATEGORY_NOT_FOUND',
   UnitNotFound: 'UNIT_NOT_FOUND',
   UnitInvalidPhone: 'UNIT_INVALID_PHONE',
   UserNotFound: 'USER_NOT_FOUND',
