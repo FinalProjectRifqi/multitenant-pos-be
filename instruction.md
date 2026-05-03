@@ -1,37 +1,192 @@
 <context>
 
-Kita akan membuat sebuah fitur untuk mengupload, mengambil, mengedit, dan, menghapus file. Jadi, fitur ini akan memanfaatkan object storage dari Supabase. Pertama-tama ini adalah informasi koneksi penting untuk object storage Supabase kita.
+Kita akan membuat fitur kelola menu. Jadi ini fitur CRUD gitu lah dengan perintilan lainnya.
 
+Untuk fitur ini kita akan membuat beberapa endpoint. Endpoint pertama yang akan kita buat adalah GET `/v1/menus/:businessUnitId`. Di endpoint ini, kita juga bisa menerima query params `?search` yang akan mencari nama menu. Selain itu, endpoint ini menerima params `?sortBy` nah ini nanti bisa sort nama menu, kategori menu, dan harga menu. Kemudian bisa juga menerima query params `?sortType` yang isinya `ASC` atau `DESC`, dengan defaultnya adalah `ASC`. Lalu ada juga query params yang related dengan pagination, yaitu `?page` dan `?limit`. Secara default, nilai kedua params itu adalah 1 & 10. Nah, kita juga wajib memakai middleware `src\common\middlewares\require-permission.ts`. Permission yang kita butuhkan untuk endpoint ini adalah `menu:read` dan `menu_category:read`.
+
+Bentuk response yang diharapkan dari endpoint ini adalah sebagai berikut.
+
+```json
+{
+	"sucess": true,
+	"statusCode": 200,
+	"message": "String dalam bahasa indonesia",
+	"data": [
+		{
+			"menu_id": "string",
+			"menu_name": "string",
+			"menu_category_id": "string",
+			"menu_category_name": "string",
+			"menu_price": integer,
+			"menu_image": "string",
+			"business_unit_id": "string",
+			"business_unit_name": "string",
+			"is_available": boolean,
+		}
+	],
+	"meta": {
+		"page": integer,
+		"limit": integer,
+		"total": integer,
+		"totalPages": integer
+	}
+}
 ```
-STORAGE_URL=https://yftrnebyjqxohepbzgkq.supabase.co
-STORAGE_SECRET_KEYS=sb_secret_DyVuMVdEDjEYTINyFgBSZA_hZqNBnud
-STORAGE_BUCKET_NAME=uploads
-STORAGE_MAX_SIZE_PER_FILE=5MB
+
+Nah, sebagai catatan, di sini kita akan menampilkan menu, regardless apakah menu itu available atau tidak. Kita akan memanfaatkan libs storage untuk mendapatkan url dari si menu_image nya ya. Kita akan mengambinya dari table `large_objects` dan bukan `menu_items`.
+
+Lalu, endpoint berikutnya adalah GET `/v1/menus/:businessId/stats`. Tujuan utama dari endpoint ini adalah untuk melihat status dari semua menu di unit usaha tertentu. Nah, kita juga wajib menggunakan middleware `src\common\middlewares\require-permission.ts` yang akan mengecek permission `menu:read` dan `menu_category:read`. Untuk endpoint ini,response yang diharapkan adalah sebagai berikut.
+
+```json
+{
+	"sucess": true,
+	"statusCode": 200,
+	"message": "String dalam bahasa indonesia",
+	"data": {
+		"total_menu": integer,
+		"menu_active": integer,
+		"menu_inactive": integer,
+	}
+}
 ```
 
-Kamu hanya akan menulis lengkap credential di atas di file `.env`. Di file env lain cukup data dummy saja.
+Beralih ke endpoint selanjutnya adalah POST `/v1/menus/:businessId`. Jadi, tujuan dari endpoint ini adalah untuk menambah menu di unit usaha tertentu. Di endpoint ini kita akan menerima request `menu_name`, `menu_category_id`, `price`, `is_available` --> menerima true or false, dan `menu_image` --> ini opsional, wajib dicek mimetypenya itu image/\* dan max sizenya tidak boleh melebihi STORAGE_MAX_SIZE_PER_FILE. Kita juga akan menggunakan libs storage yang sudah ada. Nanti di sini kita tidak perlu menyimpan data ke kolom `image_url` di table `menu_items` karena nanti table itu akan dihapus. Nah, di Di endpoint ini middleware `src\common\middlewares\require-permission.ts` akan mengecek permission `menu:read`, `menu:create`. Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
 
-Kita akan membuat konfigurasi koneksinya di `src/config/storage.config.ts`.
+```json
+{
+  "sucess": true,
+  "statusCode": 201,
+  "message": "String dalam bahasa indonesia",
+  "data": {
+			"menu_id": "string",
+			"menu_name": "string",
+			"menu_category_id": "string",
+			"menu_category_name": "string",
+			"menu_price": integer,
+			"menu_image": "string",
+			"is_available": boolean,
+  }
+}
+```
 
-Nah, lalu semua fungsionalitas seperti untuk mengupload, retrieve, dan menghapus filenya itu akan kita buat di `src/libs/storage`.
+Untuk mengedit data, kita akan menggunakan endpoint PATCH `/v1/menus/:businessId/:menuId`. Jadi, tujuan dari endpoint ini adalah untuk menambah menu di unit usaha tertentu. Di endpoint ini kita akan menerima request `menu_name`, `menu_category_id`, `price`, `is_available` --> menerima true or false, dan `menu_image` --> ini opsional, wajib dicek mimetypenya itu image/\* dan max sizenya tidak boleh melebihi STORAGE_MAX_SIZE_PER_FILE. Kita juga akan menggunakan libs storage yang sudah ada. Nanti di sini kita tidak perlu menyimpan data ke kolom `image_url` di table `menu_items` karena nanti table itu akan dihapus. Nah, di Di endpoint ini middleware `src\common\middlewares\require-permission.ts` akan mengecek permission `menu:read`, `menu:update`. Nah, karena ini kita menggunakan `PATCH`, ini Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
 
-Mengapa kita membuatnya di sana? Karena rencananya itu adalah kita tidak akan membuatkan endpoint untuk seluruh fungsionalitas storage ini. Jadi, nanti domain yang membutuhkannya akan memanggil fungsi/method dari libs tersebut.
+```json
+{
+  "sucess": true,
+  "statusCode": 200,
+  "message": "String dalam bahasa indonesia",
+  "data": {
+			"menu_id": "string",
+			"menu_name": "string",
+			"menu_category_id": "string",
+			"menu_category_name": "string",
+			"menu_price": integer,
+			"menu_image": "string",
+			"is_available": boolean,
+  }
+}
+```
 
-Di dalam folder libs itu juga akan ada folder dto, errors, models, repositories, kemudian ada file storage.controller.ts, storage.service.ts, dan storage.ts.
+Ada endpoint untuk melihat detail data dengan endpoint GET `/v1/menus/:businessId/:menuId`. Di endpoint ini, middlewarenya akan cek permission `menu:read` saja.
 
-Untuk retrieved file itu kita akan mengugnakan signed file itu dengan TTL nya maybe di sekitar 6 jam (please give me suggestion regarding this) dan yang diambil itu adalah `stored_name` dari table `large_objects`. Nah, `stored_name` ini sendiri adalah string unique yang akan digenerate ketika proses upload dilakukan dan berhasil. Oiya, karena kita tidak membuat dan mendefinisikan "folder" apa yang ingin jadi tujuan dimana menyimpan filenya. Maka nanti domain yang menggunakan fungsi/method mengupload/mengedit akan menentukan mau di folder apa. Jika ternnyata di supabasenya belum ada, harus dibuat. Tapi, jika sudah ada, ya langusng taruh di sana saja.
+```json
+{
+	"sucess": true,
+	"statusCode": 200,
+	"message": "String dalam bahasa indonesia",
+	"data":
+		{
+			"menu_id": "string",
+			"menu_name": "string",
+			"menu_category_id": "string",
+			"menu_category_name": "string",
+			"menu_price": integer,
+			"menu_image": "string",
+			"business_unit_id": "string",
+			"business_unit_name": "string",
+			"is_available": boolean,
+		}
+}
+```
 
-Jadi nanti ketika di-retrieved filenya itu akan seperti ini ketika di-retrieved `storage_url/storage_bucket_name/folders_name/stored_name-signed.mimetype`. Alias itu mengambil dari kolom `path`, dimana `path` ini akan dibuat ketika mengupload/mengedit file.
+Terakhir, endpoint yang akan kita buat adalah endpoint DELETE `/v1/menus/:businessId/:menuId`. Di endpoint ini, middlewarenya akan mengecek permission `menu:read` dan `menu:delete`. Kita juga akan menggunakan libs storage yang sudah ada untuk mengelola file image dari menunya ya.
 
-Kita juga akan membuat useful log dengan tingkatan INFO, WARN, dan ERROR.
+```json
+{
+	"success": true,
+	"statusCode": 200, --> Ini diambil dari header gitu
+	"message": "string dalam bahasa indonesia"
+}
+```
 
-Kemudian, kita juga akan membuat unit test dan integration test. Integration testnya bertujuan untuk mengecek apakah siklus CRUD file sudah berhasil atau tidak. Semua bahan testnya ada di file `tests/assets/images/*`.
+Kita akan membuatnya di domain menus. Polanya ikuti dari domain auth, business-units, users, dan roles. Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder `src/swagger/menus.swagger.ts`. Di swagger nanti, dokumentasinya harus lengkap. Meliputi semua kemungkinan http code di setiap endpoint dan harus ada example responsenya.
 
 Kita akan menggunakan paradigma defensive programming, dimana kita akan menjalankan try catch dulu baru logicnya.
 
 Ini adalah table-table yang mungkin kamu butuhkan dalam fitur ini.
 
 ```sql
+-- public.menu_items_units definition
+
+-- Drop table
+
+-- DROP TABLE public.menu_items_units;
+
+CREATE TABLE public.menu_items_units (
+	menu_item_unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	menu_item_id uuid NOT NULL,
+	unit_id uuid NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT menu_items_units_pkey PRIMARY KEY (menu_item_unit_id),
+	CONSTRAINT menu_items_units_menu_item_id_foreign FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(menu_item_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT menu_items_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+
+-- public.menu_items definition
+
+-- Drop table
+
+-- DROP TABLE public.menu_items;
+
+CREATE TABLE public.menu_items (
+	menu_item_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	menu_category_id uuid NOT NULL,
+	menu_item_name varchar(255) NOT NULL,
+	item_price numeric(10, 2) NOT NULL,
+	is_available bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	blob_id uuid NULL,
+	CONSTRAINT menu_items_menu_item_name_unique UNIQUE (menu_item_name),
+	CONSTRAINT menu_items_pkey PRIMARY KEY (menu_item_id),
+	CONSTRAINT menu_items_blob_id_foreign FOREIGN KEY (blob_id) REFERENCES public.large_objects(id_blob) ON DELETE SET NULL ON UPDATE CASCADE,
+	CONSTRAINT menu_items_menu_category_id_foreign FOREIGN KEY (menu_category_id) REFERENCES public.menu_categories(menu_category_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.menu_categories definition
+
+-- Drop table
+
+-- DROP TABLE public.menu_categories;
+
+CREATE TABLE public.menu_categories (
+	menu_category_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	unit_id uuid NOT NULL,
+	category_name varchar(255) NOT NULL,
+	description varchar(255) NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT menu_categories_category_name_unique UNIQUE (category_name),
+	CONSTRAINT menu_categories_pkey PRIMARY KEY (menu_category_id),
+	CONSTRAINT menu_categories_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
 -- public.large_objects definition
 
 -- Drop table
