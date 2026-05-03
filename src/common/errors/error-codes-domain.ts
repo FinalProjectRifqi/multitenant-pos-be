@@ -16,6 +16,12 @@ export const DomainErrorCodes = {
   UserSelfDelete: 'USER_SELF_DELETE',
   UserSelfDeactivate: 'USER_SELF_DEACTIVATE',
   RoleNotFound: 'ROLE_NOT_FOUND',
+  StorageBlobNotFound: 'STORAGE_BLOB_NOT_FOUND',
+  StorageFileTooLarge: 'STORAGE_FILE_TOO_LARGE',
+  StorageUploadFailed: 'STORAGE_UPLOAD_FAILED',
+  StorageDeleteFailed: 'STORAGE_DELETE_FAILED',
+  StorageUpdateFailed: 'STORAGE_UPDATE_FAILED',
+  StorageSignedUrlFailed: 'STORAGE_SIGNED_URL_FAILED',
 } as const;
 
 export type DomainErrorCode =

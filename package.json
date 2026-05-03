@@ -14,11 +14,13 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",
     "test:unit": "jest --testPathPatterns=__tests__",
+    "test:integration": "jest --config jest.integration.config.cjs",
     "db:migrate": "knex migrate:latest",
     "db:rollback": "knex migrate:rollback",
     "db:seed": "knex seed:run"
   },
   "dependencies": {
+    "@supabase/storage-js": "^2.105.1",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",

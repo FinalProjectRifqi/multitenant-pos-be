@@ -1,216 +1,53 @@
 <context>
 
-Kita akan membuat sebuah fitur untuk mengelola pengguna. Dalam hal ini adalah CRUD pengguna dan beberapa perintilan lainnya.
+Kita akan membuat sebuah fitur untuk mengupload, mengambil, mengedit, dan, menghapus file. Jadi, fitur ini akan memanfaatkan object storage dari Supabase. Pertama-tama ini adalah informasi koneksi penting untuk object storage Supabase kita.
 
-Untuk fitur ini kita akan membuat beberapa endpoint. Endpoint pertama yang akan kita buat adalah GET `/v1/users`. Di endpoint ini, kita juga bisa menerima query params `?search` yang akan mencari nama, username, email, dan role. Selain itu, endpoint ini menerima params `?sortBy` nah ini nanti bisa sort nama, username, unit usaha, role, status, dan login terakhir (semua make bahasa inggris). Kemudian bisa juga menerima query params `?sortType` yang isinya `ASC` atau `DESC`, dengan defaultnya adalah `ASC`. Lalu ada juga query params yang related dengan pagination, yaitu `?page` dan `?limit`. Secara default, nilai kedua params itu adalah 1 & 10. Nah, kita juga wajib memakai middleware `src\common\middlewares\require-permission.ts`. Permission yang kita butuhkan untuk endpoint ini adalah `user:read` saja.
-
-Bentuk response yang diinginkan dari endpoint ini adadlah sebagai berikut.
-
-```json
-{
-	"success": true,
-	"statusCode": 200, --> ini diambil dari response header gitu
-	"message": "String dalam bahasa indonesia",
-	"data": [
-		{
-			"user_id": "string",
-			"full_name": "string",
-			"user_name": "string", --> diambil dari kolom username
-			"business_unit_id": "string",
-			"business_unit_name": "string",
-			"role_id": "string",
-			"role_name": "string",
-			"status": "string",
-			"last_login": "string",
-		}
-	]
-}
+```
+STORAGE_URL=https://yftrnebyjqxohepbzgkq.supabase.co
+STORAGE_SECRET_KEYS=sb_secret_DyVuMVdEDjEYTINyFgBSZA_hZqNBnud
+STORAGE_BUCKET_NAME=uploads
+STORAGE_MAX_SIZE_PER_FILE=5MB
 ```
 
-Nah sebagai catatan, di sini kita juga akan menampilkan data dari user yang login dan mengakses endpoint ini. Kita hanya akan exclude data yang sudah di soft delete (deleted_at tidak kosong).
+Kamu hanya akan menulis lengkap credential di atas di file `.env`. Di file env lain cukup data dummy saja.
 
-Lalu, endpoint berikutnya adalah GET `/v1/users/stats`. Di endpoint ini tujuan kita adalah menampilkan data statistik dari pengguna. Nah, kita juga wajib memakai middleware `src\common\middlewares\require-permission.ts`. Permission yang kita butuhkan untuk endpoint ini adalah `user:read` saja. Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
+Kita akan membuat konfigurasi koneksinya di `src/config/storage.config.ts`.
 
-```json
-{
-	"success": true,
-	"statusCode": 200,
-	"message": "String dalam bahasa indonesia",
-	"data": [
-		{
-			"total_users": integer,
-			"users_active": integer,
-			"users_inactive": integer
-		}
-	]
-}
-```
+Nah, lalu semua fungsionalitas seperti untuk mengupload, retrieve, dan menghapus filenya itu akan kita buat di `src/libs/storage`.
 
-Beralih ke endpoint selanjutnya adalah POST `/v1/users`. Di endpoint ini kita akan menerima request `full_name`, `user_name`, `email` --> divalidasi secara ketat apakah emailnya valid atau tidak, `role_id`, `business_unit_id`, dan `password`. Di endpoint ini middleware `src\common\middlewares\require-permission.ts` akan mengecek permission `user:read`, `user:create`, dan `unit:assign_user`. Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
+Mengapa kita membuatnya di sana? Karena rencananya itu adalah kita tidak akan membuatkan endpoint untuk seluruh fungsionalitas storage ini. Jadi, nanti domain yang membutuhkannya akan memanggil fungsi/method dari libs tersebut.
 
-```json
-{
-	"success": true,
-	"statusCode": 201,
-	"message": "String dalam bahasa Indonesia",
-	"data": [
-		{
-			"user_id": "string",
-			"user_name": "string",
-			"password": "string" --> ini password yang diinput (bukan yang dihash)
-		}
-	]
-}
-```
+Di dalam folder libs itu juga akan ada folder dto, errors, models, repositories, kemudian ada file storage.controller.ts, storage.service.ts, dan storage.ts.
 
-Rasionalisasi mengapa menampilkan password yang diinput direspon adalah karena ini tools internal dan yang membuat user itu adalah owner dari perusahaan ini. Ini request pribadi beliau dan gabisa diganggu gugat. Nah, karena untuk saat ini belum ada mekanisme menastikan user ini statusnya aktif. Jaidnya kita akan otomatis set di DB statusnya aktif. Kita juga akan langsung masukkan datanya ke unit usaha yang dia di-assign ya.
+Untuk retrieved file itu kita akan mengugnakan signed file itu dengan TTL nya maybe di sekitar 6 jam (please give me suggestion regarding this) dan yang diambil itu adalah `stored_name` dari table `large_objects`. Nah, `stored_name` ini sendiri adalah string unique yang akan digenerate ketika proses upload dilakukan dan berhasil. Oiya, karena kita tidak membuat dan mendefinisikan "folder" apa yang ingin jadi tujuan dimana menyimpan filenya. Maka nanti domain yang menggunakan fungsi/method mengupload/mengedit akan menentukan mau di folder apa. Jika ternnyata di supabasenya belum ada, harus dibuat. Tapi, jika sudah ada, ya langusng taruh di sana saja.
 
-Untuk mengedit data, kita akan menggunakan endpoint PATCH `/v1/users/:id`. Di endpoint ini kita akan menerima request `full_name`, `user_name`, `email` --> divalidasi secara ketat apakah emailnya valid atau tidak, `role_id`, `business_unit_id`, dan `status`. Di endpoint ini middleware `src\common\middlewares\require-permission.ts`akan mengecek permission`user:read`, `user:update`, dan `unit:assign_user`. Nah, karena ini kita menggunakan `PATCH`, ini Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
+Jadi nanti ketika di-retrieved filenya itu akan seperti ini ketika di-retrieved `storage_url/storage_bucket_name/folders_name/stored_name-signed.mimetype`. Alias itu mengambil dari kolom `path`, dimana `path` ini akan dibuat ketika mengupload/mengedit file.
 
-```json
-{
-	"success": true,
-	"statusCode": 200, --> ini diambil dari response header gitu
-	"message": "String dalam bahasa indonesia",
-	"data": [
-		{
-			"user_id": "string",
-			"full_name": "string",
-			"user_name": "string", --> diambil dari kolom username
-			"business_unit_id": "string",
-			"business_unit_name": "string",
-			"role_id": "string",
-			"role_name": "string",
-			"status": "string",
-		}
-	]
-}
-```
+Kita juga akan membuat useful log dengan tingkatan INFO, WARN, dan ERROR.
 
-Ada endpoint untuk melihat detail data dengan endpoint GET `/v1/users/:id`. Di endpoint ini, middlewarenya akan cek permission `user:read` saja.
-
-Ini bentuk response yang diharapkan dari endpoint ini.
-
-```json
-{
-	"success": true,
-	"statusCode": 200, --> ini diambil dari response header gitu
-	"message": "String dalam bahasa indonesia",
-	"data": [
-		{
-			"user_id": "string",
-			"full_name": "string",
-			"user_name": "string", --> diambil dari kolom username
-			"business_unit_id": "string",
-			"business_unit_name": "string",
-			"role_id": "string",
-			"role_name": "string",
-			"status": "string",
-		}
-	]
-}
-```
-
-Terakhir, endpoint yang akan kita buat adalah endpoint DELETE `/v1/users/:id`. Di endpoint ini, middlewarenya akan mengecek permission `user:read` dan `user:delete`.
-
-Di endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
-
-```json
-{
-	"success": true,
-	"statusCode": 200, --> Ini diambil dari header gitu
-	"message": "string dalam bahasa indonesia"
-}
-```
-
-Kita akan membuatnya di domain users. Polanya ikuti dari domain auth. Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder `src/swagger/users.swagger.ts`. Di swagger nanti, dokumentasinya harus lengkap. Meliputi semua kemungkinan http code di setiap endpoint dan harus ada example responsenya.
+Kemudian, kita juga akan membuat unit test dan integration test. Integration testnya bertujuan untuk mengecek apakah siklus CRUD file sudah berhasil atau tidak. Semua bahan testnya ada di file `tests/assets/images/*`.
 
 Kita akan menggunakan paradigma defensive programming, dimana kita akan menjalankan try catch dulu baru logicnya.
 
 Ini adalah table-table yang mungkin kamu butuhkan dalam fitur ini.
 
 ```sql
--- public.users definition
+-- public.large_objects definition
 
 -- Drop table
 
--- DROP TABLE public.users;
+-- DROP TABLE public.large_objects;
 
-CREATE TABLE public.users (
-	user_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	role_id uuid NOT NULL,
-	full_name varchar(255) NOT NULL,
-	username varchar(255) NOT NULL,
-	email varchar(255) NOT NULL,
-	last_login_at timestamptz NOT NULL,
-	is_active bool DEFAULT true NOT NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+CREATE TABLE public.large_objects (
+	id_blob uuid DEFAULT gen_random_uuid() NOT NULL,
+	file_name varchar(255) NOT NULL,
+	stored_name varchar(255) NOT NULL,
+	mime varchar(255) NOT NULL,
+	"path" varchar(1024) NOT NULL,
+	size_bytes int8 NOT NULL,
+	uploaded_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	deleted_at timestamptz NULL,
-	must_change_password bool DEFAULT true NOT NULL,
-	"password" varchar(255) NOT NULL,
-	CONSTRAINT users_email_unique UNIQUE (email),
-	CONSTRAINT users_pkey PRIMARY KEY (user_id),
-	CONSTRAINT users_username_unique UNIQUE (username),
-	CONSTRAINT users_role_id_foreign FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- public.roles definition
-
--- Drop table
-
--- DROP TABLE public.roles;
-
-CREATE TABLE public.roles (
-	role_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	role_name varchar(255) NOT NULL,
-	role_code varchar(255) NOT NULL,
-	description text NOT NULL,
-	is_active bool DEFAULT true NOT NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	deleted_at timestamptz NULL,
-	CONSTRAINT roles_pkey PRIMARY KEY (role_id),
-	CONSTRAINT roles_role_code_unique UNIQUE (role_code)
-);
-
--- public.user_units definition
-
--- Drop table
-
--- DROP TABLE public.user_units;
-
-CREATE TABLE public.user_units (
-	user_unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	user_id uuid NOT NULL,
-	unit_id uuid NOT NULL,
-	assigned_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	revoked_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	deleted_at timestamptz NULL,
-	CONSTRAINT user_units_pkey PRIMARY KEY (user_unit_id),
-	CONSTRAINT user_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE,
-	CONSTRAINT user_units_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE ON UPDATE CASCADE
-);
-
--- public.units definition
-
--- Drop table
-
--- DROP TABLE public.units;
-
-CREATE TABLE public.units (
-	unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
-	unit_name varchar(255) NOT NULL,
-	unit_address text NOT NULL,
-	phone_number varchar(255) NULL,
-	status text DEFAULT 'value1'::text NULL,
-	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
-	deleted_at timestamptz NULL,
-	CONSTRAINT units_pkey PRIMARY KEY (unit_id),
-	CONSTRAINT units_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])))
+	CONSTRAINT large_objects_pkey PRIMARY KEY (id_blob)
 );
 ```
 
