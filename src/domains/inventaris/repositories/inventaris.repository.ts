@@ -142,10 +142,32 @@ export class InventarisRepository implements IInventarisRepository {
         .whereNull('iiu.deleted_at');
 
       if (search) {
+        const likeSearch = `%${search}%`;
         query.where(function () {
-          this.whereILike('ii.inventory_item_name', `%${search}%`)
-            .orWhereILike('ii.description', `%${search}%`)
-            .orWhereILike('ii.unit_of_measure', `%${search}%`);
+          this.whereILike('ii.inventory_item_name', likeSearch)
+            .orWhereILike('ii.description', likeSearch)
+            .orWhereILike('ii.unit_of_measure', likeSearch)
+            .orWhereRaw('CAST(ii.current_stock AS TEXT) ILIKE ?', [likeSearch])
+            .orWhereRaw('CAST(ii.min_threshold AS TEXT) ILIKE ?', [likeSearch])
+            .orWhereRaw('CAST(ii.max_threshold AS TEXT) ILIKE ?', [likeSearch])
+            .orWhereRaw(
+              "to_char(ii.last_restocked_at, 'YYYY-MM-DD HH24:MI:SS') ILIKE ?",
+              [likeSearch],
+            )
+            .orWhereRaw(
+              "to_char(ii.last_restocked_at, 'DD/MM/YYYY HH24:MI') ILIKE ?",
+              [likeSearch],
+            )
+            .orWhereRaw(
+              `CASE
+                WHEN ii.current_stock IS NOT NULL
+                 AND ii.min_threshold IS NOT NULL
+                 AND ii.current_stock <= ii.min_threshold
+                THEN 'status stok rendah low'
+                ELSE 'status stok normal normal'
+              END ILIKE ?`,
+              [likeSearch],
+            );
         });
       }
 

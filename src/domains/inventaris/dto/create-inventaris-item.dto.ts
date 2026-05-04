@@ -20,7 +20,10 @@ export class CreateInventarisItemDto {
   inventory_item_name!: string;
 
   @IsString()
-  @IsNotEmpty({ message: 'Deskripsi item inventaris tidak boleh kosong' })
+  @IsOptional()
+  @MaxLength(1000, {
+    message: 'Deskripsi maksimal 1000 karakter',
+  })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
