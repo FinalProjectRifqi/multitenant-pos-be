@@ -27,6 +27,11 @@ export const DomainErrorCodes = {
   MenuNotFound: 'MENU_NOT_FOUND',
   MenuConflict: 'MENU_CONFLICT',
   MenuInvalidImageType: 'MENU_INVALID_IMAGE_TYPE',
+  InventoryUnitNotFound: 'INVENTORY_UNIT_NOT_FOUND',
+  InventoryItemNotFound: 'INVENTORY_ITEM_NOT_FOUND',
+  InventoryItemConflict: 'INVENTORY_ITEM_CONFLICT',
+  InventoryInsufficientStock: 'INVENTORY_INSUFFICIENT_STOCK',
+  InventoryInvalidTransactionType: 'INVENTORY_INVALID_TRANSACTION_TYPE',
 } as const;
 
 export type DomainErrorCode =

@@ -11,6 +11,7 @@ import { roleSwaggerDoc } from '../swagger/role.swagger';
 import { menusSwaggerDoc } from '../swagger/menus.swagger';
 import { usersSwaggerDoc } from '../swagger/users.swagger';
 import { menuCategorySwaggerDoc } from '../swagger/menu-categories.swagger';
+import { inventarisSwaggerDoc } from '../swagger/inventaris.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -75,6 +76,7 @@ const buildOpenApiDocument = () => {
     usersSwaggerDoc,
     menusSwaggerDoc,
     menuCategorySwaggerDoc,
+    inventarisSwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 
