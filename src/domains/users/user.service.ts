@@ -454,6 +454,7 @@ export class UserService {
       email: user.email,
       role_id: user.role_id,
       role_name: user.role_name,
+      role_code: user.role_code,
       status: user.is_active ? 'active' : 'inactive',
       last_login: user.last_login_at,
       business_units: user.business_units,

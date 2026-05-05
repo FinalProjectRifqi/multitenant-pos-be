@@ -10,6 +10,7 @@ import { buildMenuRouter } from '../domains/menus/menus';
 import { buildUserRouter } from '../domains/users/user';
 import { buildMenuCategoryRouter } from '../domains/menu-categories/menu-category';
 import { buildInventarisRouter } from '../domains/inventaris/inventaris';
+import { buildOrderRouter } from '../domains/orders/order';
 
 export type { RequirePermissionFactory } from '../common/middlewares/require-permission';
 export { buildPermissionMiddleware } from '../common/middlewares/require-permission';
@@ -41,6 +42,7 @@ export const buildApiRouter = ({
     buildMenuCategoryRouter({ knex, config, logger }),
   );
   router.use('/inventaris', buildInventarisRouter({ knex, config, logger }));
+  router.use('/orders', buildOrderRouter({ knex, config, logger }));
 
   return router;
 };

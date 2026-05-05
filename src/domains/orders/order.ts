@@ -1,1 +1,1 @@
-export type Order = object;
+export { buildOrderRouter } from './order.routes';

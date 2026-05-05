@@ -5,11 +5,22 @@ import { getLoggerConfig, type LoggerConfig } from './logger.config';
 import { getCorsConfig, type CorsConfig } from './cors.config';
 import { getStorageConfig, type StorageConfig } from './storage.config';
 
-export type { NodeEnv, DatabaseConfig, LoggerConfig, CorsConfig, StorageConfig };
+export type {
+  NodeEnv,
+  DatabaseConfig,
+  LoggerConfig,
+  CorsConfig,
+  StorageConfig,
+};
 
 export interface JwtConfig {
   secret: string;
   expiresIn: string;
+}
+
+export interface OrderConfig {
+  pendingStatusUuid: string;
+  cancelStatusUuid: string;
 }
 
 export interface AppConfig {
@@ -21,6 +32,7 @@ export interface AppConfig {
   jwt: JwtConfig;
   bcryptSaltRounds: number;
   storage: StorageConfig;
+  order: OrderConfig;
   isLocalEnv: boolean;
   isDevelopmentEnv: boolean;
   isProductionEnv: boolean;
@@ -36,6 +48,8 @@ export const getAppConfig = (): AppConfig => {
     JWT_SECRET: str(),
     JWT_EXPIRES_IN: str({ default: '1h' }),
     BCRYPT_SALT_ROUNDS: num({ default: 12 }),
+    PENDING_ORDER_STATUS_UUID: str(),
+    CANCEL_ORDER_STATUS_UUID: str(),
   });
 
   const nodeEnv = env.NODE_ENV as NodeEnv;
@@ -57,6 +71,10 @@ export const getAppConfig = (): AppConfig => {
     },
     bcryptSaltRounds: env.BCRYPT_SALT_ROUNDS,
     storage,
+    order: {
+      pendingStatusUuid: env.PENDING_ORDER_STATUS_UUID,
+      cancelStatusUuid: env.CANCEL_ORDER_STATUS_UUID,
+    },
     isLocalEnv: nodeEnv === 'local',
     isDevelopmentEnv: nodeEnv === 'development',
     isProductionEnv: nodeEnv === 'production',

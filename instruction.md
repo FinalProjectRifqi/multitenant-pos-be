@@ -1,132 +1,246 @@
 <context>
 
-Kita akan membuat fitur kelola menu. Jadi ini fitur CRUD gitu lah dengan perintilan lainnya.
+Kita akan membuat sebuah fitur order. Jadi, fitur order hanya sampai menambahkan order ke dalam database dan belum sampai tahap payment atau pembayaran.
 
-Untuk fitur ini kita akan membuat beberapa endpoint. Endpoint pertama yang akan kita buat adalah GET `/v1/menus/:businessUnitId`. Di endpoint ini, kita juga bisa menerima query params `?search` yang akan mencari nama menu. Selain itu, endpoint ini menerima params `?sortBy` nah ini nanti bisa sort nama menu, kategori menu, dan harga menu. Kemudian bisa juga menerima query params `?sortType` yang isinya `ASC` atau `DESC`, dengan defaultnya adalah `ASC`. Lalu ada juga query params yang related dengan pagination, yaitu `?page` dan `?limit`. Secara default, nilai kedua params itu adalah 1 & 10. Nah, kita juga wajib memakai middleware `src\common\middlewares\require-permission.ts`. Permission yang kita butuhkan untuk endpoint ini adalah `menu:read` dan `menu_category:read`.
+Pertama-tama kita butuh sebuah endpoint untuk mendapatkan data seluruh pesanan di unit tertentu. Nah nanti endpoint GET All ini akan menampilkan data nomor order, nama pelanggan, nomor meja (kalo tipenya itu bukan dine-in maka null aja), tipe order (with uuid), total harga, status order, waktu order. Di GET All ini juga bisa filter by status, mulai dari tampilin semua status, menunggu, diproses, siap, selesai. Terus ini juga butuh pagination (ikutin di domain yang lain). Lalu, middleware require permission wajib cek apakah ada permission `order:read`.
 
-Bentuk response yang diharapkan dari endpoint ini adalah sebagai berikut.
+Lalu, kita juga butuh endpoint untuk masukin data order (POST). Data yang dibutuhkan adalah tipe order (dine in atau takeaway) tapi ini nanti yang dimasukin UUID. Nama pelanggan, nomor meja itu hanya diisi kalau tadi tipe ordernya dine in, kalau takeway itu NULL, menu yang dipesan dan jumlahnya berapa, harga per item, subtotal, pajak, dan total pembayaran atau grand total. Middleware require permission wajib cek apakah ada permission `order:create`.
 
-```json
-{
-	"sucess": true,
-	"statusCode": 200,
-	"message": "String dalam bahasa indonesia",
-	"data": [
-		{
-			"menu_id": "string",
-			"menu_name": "string",
-			"menu_category_id": "string",
-			"menu_category_name": "string",
-			"menu_price": integer,
-			"menu_image": "string",
-			"business_unit_id": "string",
-			"business_unit_name": "string",
-			"is_available": boolean,
-		}
-	],
-	"meta": {
-		"page": integer,
-		"limit": integer,
-		"total": integer,
-		"totalPages": integer
-	}
-}
-```
+Nanti juga ada endpoint untuk ubah data order (PATCH). Data yang dibtuuhkan itu sama kaya yang di-POST. Yang membedakan adalah harus dicek dulu apakah status ordernya sudah selesai atau belum. Kalau sudah selesai maka tidak boleh diupdate, kalau belum selesai baru boleh. Middleware require permission wajib cek apakah ada permission `order:read` dan `order:update`.
 
-Nah, sebagai catatan, di sini kita akan menampilkan menu, regardless apakah menu itu available atau tidak. Kita akan memanfaatkan libs storage untuk mendapatkan url dari si menu_image nya ya. Kita akan mengambinya dari table `large_objects` dan bukan `menu_items`.
+Kita juga akan membuat endpoint untuk cancel (hapus) order. Yaitu endpointnya (DELETE). Di sini harus cek dulu yaitu selama statusnya belum diproses, maka bisa di-cancel atau hapus. Kalau sudah diproses, itu tidak bisa. Middleware require permission wajib cek apakah  ada permission `order:read` dan `order:delete`.
 
-Lalu, endpoint berikutnya adalah GET `/v1/menus/:businessId/stats`. Tujuan utama dari endpoint ini adalah untuk melihat status dari semua menu di unit usaha tertentu. Nah, kita juga wajib menggunakan middleware `src\common\middlewares\require-permission.ts` yang akan mengecek permission `menu:read` dan `menu_category:read`. Untuk endpoint ini,response yang diharapkan adalah sebagai berikut.
+Kita juga akan membutuhkan endpoint untuk get detail order. Middleware require permission wajib cek apakah ada permission `order:read`.
 
-```json
-{
-	"sucess": true,
-	"statusCode": 200,
-	"message": "String dalam bahasa indonesia",
-	"data": {
-		"total_menu": integer,
-		"menu_active": integer,
-		"menu_inactive": integer,
-	}
-}
-```
-
-Beralih ke endpoint selanjutnya adalah POST `/v1/menus/:businessId`. Jadi, tujuan dari endpoint ini adalah untuk menambah menu di unit usaha tertentu. Di endpoint ini kita akan menerima request `menu_name`, `menu_category_id`, `price`, `is_available` --> menerima true or false, dan `menu_image` --> ini opsional, wajib dicek mimetypenya itu image/\* dan max sizenya tidak boleh melebihi STORAGE_MAX_SIZE_PER_FILE. Kita juga akan menggunakan libs storage yang sudah ada. Nanti di sini kita tidak perlu menyimpan data ke kolom `image_url` di table `menu_items` karena nanti table itu akan dihapus. Nah, di Di endpoint ini middleware `src\common\middlewares\require-permission.ts` akan mengecek permission `menu:read`, `menu:create`. Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
-
-```json
-{
-  "sucess": true,
-  "statusCode": 201,
-  "message": "String dalam bahasa indonesia",
-  "data": {
-			"menu_id": "string",
-			"menu_name": "string",
-			"menu_category_id": "string",
-			"menu_category_name": "string",
-			"menu_price": integer,
-			"menu_image": "string",
-			"is_available": boolean,
-  }
-}
-```
-
-Untuk mengedit data, kita akan menggunakan endpoint PATCH `/v1/menus/:businessId/:menuId`. Jadi, tujuan dari endpoint ini adalah untuk menambah menu di unit usaha tertentu. Di endpoint ini kita akan menerima request `menu_name`, `menu_category_id`, `price`, `is_available` --> menerima true or false, dan `menu_image` --> ini opsional, wajib dicek mimetypenya itu image/\* dan max sizenya tidak boleh melebihi STORAGE_MAX_SIZE_PER_FILE. Kita juga akan menggunakan libs storage yang sudah ada. Nanti di sini kita tidak perlu menyimpan data ke kolom `image_url` di table `menu_items` karena nanti table itu akan dihapus. Nah, di Di endpoint ini middleware `src\common\middlewares\require-permission.ts` akan mengecek permission `menu:read`, `menu:update`. Nah, karena ini kita menggunakan `PATCH`, ini Untuk endpoint ini, bentuk response yang diharapkan adalah sebagai berikut.
-
-```json
-{
-  "sucess": true,
-  "statusCode": 200,
-  "message": "String dalam bahasa indonesia",
-  "data": {
-			"menu_id": "string",
-			"menu_name": "string",
-			"menu_category_id": "string",
-			"menu_category_name": "string",
-			"menu_price": integer,
-			"menu_image": "string",
-			"is_available": boolean,
-  }
-}
-```
-
-Ada endpoint untuk melihat detail data dengan endpoint GET `/v1/menus/:businessId/:menuId`. Di endpoint ini, middlewarenya akan cek permission `menu:read` saja.
-
-```json
-{
-	"sucess": true,
-	"statusCode": 200,
-	"message": "String dalam bahasa indonesia",
-	"data":
-		{
-			"menu_id": "string",
-			"menu_name": "string",
-			"menu_category_id": "string",
-			"menu_category_name": "string",
-			"menu_price": integer,
-			"menu_image": "string",
-			"business_unit_id": "string",
-			"business_unit_name": "string",
-			"is_available": boolean,
-		}
-}
-```
-
-Terakhir, endpoint yang akan kita buat adalah endpoint DELETE `/v1/menus/:businessId/:menuId`. Di endpoint ini, middlewarenya akan mengecek permission `menu:read` dan `menu:delete`. Kita juga akan menggunakan libs storage yang sudah ada untuk mengelola file image dari menunya ya.
-
-```json
-{
-	"success": true,
-	"statusCode": 200, --> Ini diambil dari header gitu
-	"message": "string dalam bahasa indonesia"
-}
-```
-
-Kita akan membuatnya di domain menus. Polanya ikuti dari domain auth, business-units, users, dan roles. Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder `src/swagger/menus.swagger.ts`. Di swagger nanti, dokumentasinya harus lengkap. Meliputi semua kemungkinan http code di setiap endpoint dan harus ada example responsenya.
+Kita akan membuatnya di domain orders. Polanya ikuti dari domain auth, business-units, users, menus dan roles. Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder src/swagger/orders.swagger.ts. Di swagger nanti, dokumentasinya harus lengkap. Meliputi semua kemungkinan http code di setiap endpoint dan harus ada example responsenya.
 
 Kita akan menggunakan paradigma defensive programming, dimana kita akan menjalankan try catch dulu baru logicnya.
 
-Ini adalah table-table yang mungkin kamu butuhkan dalam fitur ini.
-
+Ini table yang mungkin akan kamu butuhkan
 ```sql
+-- public.users definition
+
+-- Drop table
+
+-- DROP TABLE public.users;
+
+CREATE TABLE public.users (
+	user_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	role_id uuid NOT NULL,
+	full_name varchar(255) NOT NULL,
+	username varchar(255) NOT NULL,
+	email varchar(255) NOT NULL,
+	last_login_at timestamptz NOT NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	must_change_password bool DEFAULT true NOT NULL,
+	"password" varchar(255) NOT NULL,
+	CONSTRAINT users_email_unique UNIQUE (email),
+	CONSTRAINT users_pkey PRIMARY KEY (user_id),
+	CONSTRAINT users_username_unique UNIQUE (username),
+	CONSTRAINT users_role_id_foreign FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.user_units definition
+
+-- Drop table
+
+-- DROP TABLE public.user_units;
+
+CREATE TABLE public.user_units (
+	user_unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	user_id uuid NOT NULL,
+	unit_id uuid NOT NULL,
+	assigned_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	revoked_at timestamptz NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT user_units_pkey PRIMARY KEY (user_unit_id),
+	CONSTRAINT user_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT user_units_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.units definition
+
+-- Drop table
+
+-- DROP TABLE public.units;
+
+CREATE TABLE public.units (
+	unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	unit_name varchar(255) NOT NULL,
+	unit_address text NOT NULL,
+	phone_number varchar(255) NULL,
+	status text DEFAULT 'value1'::text NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT units_pkey PRIMARY KEY (unit_id),
+	CONSTRAINT units_status_check CHECK ((status = ANY (ARRAY['active'::text, 'inactive'::text])))
+);
+
+-- public.roles definition
+
+-- Drop table
+
+-- DROP TABLE public.roles;
+
+CREATE TABLE public.roles (
+	role_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	role_name varchar(255) NOT NULL,
+	role_code varchar(255) NOT NULL,
+	description text NOT NULL,
+	is_active bool DEFAULT true NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT roles_pkey PRIMARY KEY (role_id),
+	CONSTRAINT roles_role_code_unique UNIQUE (role_code)
+);
+
+-- public.role_permissions definition
+
+-- Drop table
+
+-- DROP TABLE public.role_permissions;
+
+CREATE TABLE public.role_permissions (
+	role_permission_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	role_id uuid NOT NULL,
+	permission_id uuid NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT role_permissions_pkey PRIMARY KEY (role_permission_id),
+	CONSTRAINT role_permissions_permission_id_foreign FOREIGN KEY (permission_id) REFERENCES public.permissions(permission_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT role_permissions_role_id_foreign FOREIGN KEY (role_id) REFERENCES public.roles(role_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.permissions definition
+
+-- Drop table
+
+-- DROP TABLE public.permissions;
+
+CREATE TABLE public.permissions (
+	permission_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	feature varchar(255) NOT NULL,
+	description text NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT permissions_pkey PRIMARY KEY (permission_id)
+);
+
+-- public.payments definition
+
+-- Drop table
+
+-- DROP TABLE public.payments;
+
+CREATE TABLE public.payments (
+	payment_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	order_id uuid NOT NULL,
+	reference_number varchar(255) NOT NULL,
+	amount float4 NOT NULL,
+	payment_status varchar(255) NOT NULL,
+	failure_reason varchar(255) NULL,
+	paid_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	expired_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT payments_pkey PRIMARY KEY (payment_id),
+	CONSTRAINT payments_reference_number_unique UNIQUE (reference_number),
+	CONSTRAINT payments_order_id_foreign FOREIGN KEY (order_id) REFERENCES public.orders(order_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.orders definition
+
+-- Drop table
+
+-- DROP TABLE public.orders;
+
+CREATE TABLE public.orders (
+	order_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	user_id uuid NOT NULL,
+	order_number varchar(255) NOT NULL,
+	table_number varchar(255) NOT NULL,
+	subtotal float4 NOT NULL,
+	tax_amount float4 NOT NULL,
+	total_amount float4 NOT NULL,
+	notes varchar(255) NULL,
+	ordered_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	completed_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	customer_name varchar(255) NOT NULL,
+	order_type_id uuid NOT NULL,
+	deleted_at timestamptz NULL,
+	order_status_id uuid NOT NULL,
+	CONSTRAINT orders_order_number_unique UNIQUE (order_number),
+	CONSTRAINT orders_pkey PRIMARY KEY (order_id),
+	CONSTRAINT orders_table_number_unique UNIQUE (table_number),
+	CONSTRAINT orders_order_type_id_foreign FOREIGN KEY (order_type_id) REFERENCES public.order_types(order_type_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT orders_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.order_status definition
+
+-- Drop table
+
+-- DROP TABLE public.order_status;
+
+CREATE TABLE public.order_status (
+	order_status_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	order_status_name varchar(255) NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT order_status_order_status_name_unique UNIQUE (order_status_name),
+	CONSTRAINT order_status_pkey PRIMARY KEY (order_status_id)
+);
+
+-- public.order_types definition
+
+-- Drop table
+
+-- DROP TABLE public.order_types;
+
+CREATE TABLE public.order_types (
+	order_type_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	order_type_name varchar(255) NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT order_types_order_type_name_unique UNIQUE (order_type_name),
+	CONSTRAINT order_types_pkey PRIMARY KEY (order_type_id)
+);
+
+-- public.order_items definition
+
+-- Drop table
+
+-- DROP TABLE public.order_items;
+
+CREATE TABLE public.order_items (
+	order_item_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	order_id uuid NOT NULL,
+	menu_item_id uuid NOT NULL,
+	quantity int4 NOT NULL,
+	item_price float4 NOT NULL,
+	notes varchar(255) NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT order_items_pkey PRIMARY KEY (order_item_id),
+	CONSTRAINT order_items_menu_item_id_foreign FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(menu_item_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT order_items_order_id_foreign FOREIGN KEY (order_id) REFERENCES public.orders(order_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
 -- public.menu_items_units definition
 
 -- Drop table
@@ -140,11 +254,11 @@ CREATE TABLE public.menu_items_units (
 	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
 	deleted_at timestamptz NULL,
+	CONSTRAINT menu_items_units_menu_item_id_unit_id_unique UNIQUE (menu_item_id, unit_id),
 	CONSTRAINT menu_items_units_pkey PRIMARY KEY (menu_item_unit_id),
 	CONSTRAINT menu_items_units_menu_item_id_foreign FOREIGN KEY (menu_item_id) REFERENCES public.menu_items(menu_item_id) ON DELETE CASCADE ON UPDATE CASCADE,
 	CONSTRAINT menu_items_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-
 
 -- public.menu_items definition
 
@@ -187,6 +301,7 @@ CREATE TABLE public.menu_categories (
 	CONSTRAINT menu_categories_pkey PRIMARY KEY (menu_category_id),
 	CONSTRAINT menu_categories_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
+
 -- public.large_objects definition
 
 -- Drop table
@@ -204,8 +319,71 @@ CREATE TABLE public.large_objects (
 	deleted_at timestamptz NULL,
 	CONSTRAINT large_objects_pkey PRIMARY KEY (id_blob)
 );
-```
 
+-- public.inventory_transactions definition
+
+-- Drop table
+
+-- DROP TABLE public.inventory_transactions;
+
+CREATE TABLE public.inventory_transactions (
+	inventory_transaction_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	user_id uuid NOT NULL,
+	inventory_item_id uuid NOT NULL,
+	transaction_type varchar(50) NOT NULL,
+	quantity_changed int4 NOT NULL,
+	quantity_before int4 NOT NULL,
+	quantity_after int4 NOT NULL,
+	notes varchar(255) NULL,
+	transacted_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT inventory_transactions_pkey PRIMARY KEY (inventory_transaction_id),
+	CONSTRAINT inventory_transactions_inventory_item_id_foreign FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(inventory_item_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT inventory_transactions_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.inventory_items_units definition
+
+-- Drop table
+
+-- DROP TABLE public.inventory_items_units;
+
+CREATE TABLE public.inventory_items_units (
+	inventory_item_unit_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	inventory_item_id uuid NOT NULL,
+	unit_id uuid NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT inventory_items_units_inventory_item_id_unit_id_unique UNIQUE (inventory_item_id, unit_id),
+	CONSTRAINT inventory_items_units_pkey PRIMARY KEY (inventory_item_unit_id),
+	CONSTRAINT inventory_items_units_inventory_item_id_foreign FOREIGN KEY (inventory_item_id) REFERENCES public.inventory_items(inventory_item_id) ON DELETE CASCADE ON UPDATE CASCADE,
+	CONSTRAINT inventory_items_units_unit_id_foreign FOREIGN KEY (unit_id) REFERENCES public.units(unit_id) ON DELETE CASCADE ON UPDATE CASCADE
+);
+
+-- public.inventory_items definition
+
+-- Drop table
+
+-- DROP TABLE public.inventory_items;
+
+CREATE TABLE public.inventory_items (
+	inventory_item_id uuid DEFAULT gen_random_uuid() NOT NULL,
+	inventory_item_name varchar(255) NOT NULL,
+	description text NOT NULL,
+	unit_of_measure varchar(255) NOT NULL,
+	current_stock int4 NULL,
+	min_threshold int4 NULL,
+	max_threshold int4 NULL,
+	last_restocked_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	deleted_at timestamptz NULL,
+	CONSTRAINT inventory_items_pkey PRIMARY KEY (inventory_item_id)
+);
+```
 </context>
 
 <role>

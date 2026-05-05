@@ -1,5 +1,13 @@
 export const DomainErrorCodes = {
   OrderNotFound: 'ORDER_NOT_FOUND',
+  OrderAlreadyCompleted: 'ORDER_ALREADY_COMPLETED',
+  OrderAlreadyCancelled: 'ORDER_ALREADY_CANCELLED',
+  OrderCannotBeCancelled: 'ORDER_CANNOT_BE_CANCELLED',
+  OrderItemNotFound: 'ORDER_ITEM_NOT_FOUND',
+  OrderTypeNotFound: 'ORDER_TYPE_NOT_FOUND',
+  OrderMenuNotAvailable: 'ORDER_MENU_NOT_AVAILABLE',
+  OrderMenuNotInUnit: 'ORDER_MENU_NOT_IN_UNIT',
+  OrderPriceMismatch: 'ORDER_PRICE_MISMATCH',
   AuthInvalidCredentials: 'AUTH_INVALID_CREDENTIALS',
   AuthInactiveAccount: 'AUTH_INACTIVE_ACCOUNT',
   AuthInvalidRole: 'AUTH_INVALID_ROLE',

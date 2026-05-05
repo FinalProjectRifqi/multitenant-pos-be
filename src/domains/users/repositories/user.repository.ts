@@ -202,6 +202,7 @@ export class UserRepository implements IUserRepository {
         'u.last_login_at',
         'r.role_id',
         'r.role_name',
+        'r.role_code',
       )
       .where('u.user_id', id)
       .whereNull('u.deleted_at')
