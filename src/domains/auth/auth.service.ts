@@ -126,4 +126,55 @@ export class AuthService {
       .setExpirationTime(this.config.jwt.expiresIn)
       .sign(secretKey);
   }
+
+  async getMe(jwtPayload: JwtTokenPayload): Promise<MeResponse> {
+    try {
+      const user = await this.repository.findUserById(jwtPayload.sub);
+
+      if (!user) {
+        throw authTokenInvalidError();
+      }
+
+      if (!user.is_active) {
+        throw authInactiveAccountError();
+      }
+
+      this.logger.debug({ userId: user.user_id }, 'getMe successful');
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Data pengguna berhasil diambil',
+        data: {
+          user_id: user.user_id,
+          full_name: user.full_name,
+          user_name: user.username,
+          email: user.email,
+          role_id: user.role_id,
+          role_name: user.role_name,
+          role_code: jwtPayload.roles,
+          status: user.is_active ? 'active' : 'inactive',
+          last_login: user.last_login_at,
+          business_units: user.business_units,
+          permissions: jwtPayload.permission,
+          must_change_password: jwtPayload.must_change_password,
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+
+      this.logger.error(
+        { err: error, userId: jwtPayload.sub },
+        'Unexpected error in getMe',
+      );
+
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
 }
