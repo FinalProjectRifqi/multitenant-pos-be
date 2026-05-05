@@ -1,5 +1,6 @@
 export const DomainErrorCodes = {
   OrderNotFound: 'ORDER_NOT_FOUND',
+  OrderTypeNotFound: 'ORDER_TYPE_NOT_FOUND',
   AuthInvalidCredentials: 'AUTH_INVALID_CREDENTIALS',
   AuthInactiveAccount: 'AUTH_INACTIVE_ACCOUNT',
   AuthInvalidRole: 'AUTH_INVALID_ROLE',
