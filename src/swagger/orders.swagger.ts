@@ -24,6 +24,18 @@ const orderIdParam = {
   },
 };
 
+const paymentIdParam = {
+  name: 'paymentId',
+  in: 'path',
+  required: true,
+  description: 'UUID payment',
+  schema: {
+    type: 'string',
+    format: 'uuid',
+    example: 'f1cc5d3f-g234-5e67-c890-999999999999',
+  },
+};
+
 // ===========================
 // Reusable Schemas
 // ===========================
@@ -136,6 +148,64 @@ const orderDetailSchema = {
     items: {
       type: 'array',
       items: orderItemSchema,
+    },
+  },
+};
+
+const paymentResponseSchema = {
+  type: 'object',
+  properties: {
+    payment_id: {
+      type: 'string',
+      format: 'uuid',
+      example: 'f1cc5d3f-g234-5e67-c890-999999999999',
+    },
+    order_id: {
+      type: 'string',
+      format: 'uuid',
+      example: 'a3bb4c2e-f123-4d56-b789-000000000010',
+    },
+    reference_number: {
+      type: 'string',
+      example: 'PAY-ORD-20250115-0001-20250115103045',
+    },
+    amount: { type: 'number', example: 55000 },
+    payment_status: {
+      type: 'string',
+      enum: ['pending', 'paid', 'failed', 'expired', 'cancelled', 'refunded'],
+      example: 'pending',
+    },
+    failure_reason: {
+      type: 'string',
+      nullable: true,
+      example: null,
+    },
+    paid_at: {
+      type: 'string',
+      format: 'date-time',
+      example: '2025-01-15T10:30:00.000Z',
+    },
+    expired_at: {
+      type: 'string',
+      format: 'date-time',
+      example: '2025-01-15T10:45:00.000Z',
+    },
+    created_at: {
+      type: 'string',
+      format: 'date-time',
+      example: '2025-01-15T10:30:00.000Z',
+    },
+  },
+};
+
+const paymentCashlessResponseSchema = {
+  type: 'object',
+  properties: {
+    payment: paymentResponseSchema,
+    snap_token: { type: 'string', example: 'dummy-snap-token' },
+    redirect_url: {
+      type: 'string',
+      example: 'https://app.sandbox.midtrans.com/snap/v2/vtweb/abc',
     },
   },
 };
@@ -277,6 +347,243 @@ const orderNotFoundResponse = {
   },
 };
 
+const paymentNotFoundResponse = {
+  description: 'Payment tidak ditemukan',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'PAYMENT_NOT_FOUND' },
+              message: {
+                type: 'string',
+                example: 'Payment tidak ditemukan',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentDetailNotFoundResponse = {
+  description: 'Unit usaha, order, atau payment tidak ditemukan',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                example: 'PAYMENT_NOT_FOUND',
+                enum: [
+                  'UNIT_NOT_FOUND',
+                  'ORDER_NOT_FOUND',
+                  'PAYMENT_NOT_FOUND',
+                ],
+              },
+              message: {
+                type: 'string',
+                example: 'Payment tidak ditemukan',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentAlreadyActiveResponse = {
+  description: 'Payment aktif sudah ada untuk order ini',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'PAYMENT_ALREADY_ACTIVE' },
+              message: {
+                type: 'string',
+                example: 'Payment aktif sudah ada untuk order ini',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentOrderNotReadyResponse = {
+  description: 'Order belum siap untuk dibayar',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'PAYMENT_ORDER_NOT_READY' },
+              message: {
+                type: 'string',
+                example: 'Order belum siap untuk dibayar',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentAmountMismatchResponse = {
+  description: 'Jumlah pembayaran tidak sesuai dengan total order',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'PAYMENT_AMOUNT_MISMATCH' },
+              message: {
+                type: 'string',
+                example: 'Jumlah pembayaran tidak sesuai dengan total order',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentCreateRuleResponse = {
+  description: 'Order belum siap atau jumlah pembayaran tidak sesuai',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                example: 'PAYMENT_ORDER_NOT_READY',
+                enum: ['PAYMENT_ORDER_NOT_READY', 'PAYMENT_AMOUNT_MISMATCH'],
+              },
+              message: {
+                type: 'string',
+                example: 'Order belum siap untuk dibayar',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentWebhookSignatureInvalidResponse = {
+  description: 'Signature webhook tidak valid',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                example: 'PAYMENT_WEBHOOK_SIGNATURE_INVALID',
+              },
+              message: {
+                type: 'string',
+                example: 'Signature webhook tidak valid',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentWebhookInvalidPayloadResponse = {
+  description: 'Payload webhook tidak valid',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                example: 'PAYMENT_WEBHOOK_INVALID_PAYLOAD',
+              },
+              message: {
+                type: 'string',
+                example: 'Payload webhook tidak valid',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+const paymentMidtransFailedResponse = {
+  description: 'Gagal membuat transaksi ke Midtrans',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          error: {
+            type: 'object',
+            properties: {
+              code: {
+                type: 'string',
+                example: 'PAYMENT_MIDTRANS_REQUEST_FAILED',
+              },
+              message: {
+                type: 'string',
+                example: 'Gagal membuat transaksi ke Midtrans',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 const internalServerErrorResponse = {
   description: 'Kesalahan internal server',
   content: {
@@ -377,6 +684,20 @@ const updateOrderItemInputSchema = {
       nullable: true,
       example: 'Tambah sambal',
       description: 'Catatan untuk item ini (opsional)',
+    },
+  },
+};
+
+const paymentAmountSchema = {
+  type: 'object',
+  required: ['amount'],
+  properties: {
+    amount: {
+      type: 'number',
+      minimum: 1,
+      example: 55000,
+      description:
+        'Jumlah pembayaran. Harus sesuai dengan total_amount order (toleransi <= 1 rupiah).',
     },
   },
 };
@@ -977,6 +1298,219 @@ export const ordersSwaggerDoc = {
               },
             },
           },
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
+    '/v1/orders/{unitId}/{orderId}/payments/cashless': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Buat payment cashless (Midtrans Snap)',
+        description:
+          'Membuat payment cashless untuk order yang berstatus "siap". Mengembalikan snap_token dan redirect_url dari Midtrans. Membutuhkan permission `payment:process`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: paymentAmountSchema,
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Payment cashless berhasil dibuat',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 201 },
+                    message: {
+                      type: 'string',
+                      example: 'Payment cashless berhasil dibuat',
+                    },
+                    data: paymentCashlessResponseSchema,
+                  },
+                },
+              },
+            },
+          },
+          '400': validationErrorResponse,
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': orderNotFoundResponse,
+          '409': paymentAlreadyActiveResponse,
+          '422': paymentCreateRuleResponse,
+          '500': internalServerErrorResponse,
+          '502': paymentMidtransFailedResponse,
+        },
+      },
+    },
+    '/v1/orders/{unitId}/{orderId}/payments/cash': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Buat payment cash',
+        description:
+          'Membuat payment cash untuk order yang berstatus "siap". Status payment langsung "paid". Membutuhkan permission `payment:process`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: paymentAmountSchema,
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'Payment cash berhasil dibuat',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 201 },
+                    message: {
+                      type: 'string',
+                      example: 'Payment cash berhasil dibuat',
+                    },
+                    data: paymentResponseSchema,
+                  },
+                },
+              },
+            },
+          },
+          '400': validationErrorResponse,
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': orderNotFoundResponse,
+          '409': paymentAlreadyActiveResponse,
+          '422': paymentCreateRuleResponse,
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
+    '/v1/orders/{unitId}/{orderId}/payments': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Ambil daftar payment per order',
+        description:
+          'Mengambil daftar payment untuk order tertentu. Membutuhkan permission `payment:read`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam],
+        responses: {
+          '200': {
+            description: 'Daftar payment berhasil diambil',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Data payment berhasil diambil',
+                    },
+                    data: { type: 'array', items: paymentResponseSchema },
+                  },
+                },
+              },
+            },
+          },
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': orderNotFoundResponse,
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
+    '/v1/orders/{unitId}/{orderId}/payments/{paymentId}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Ambil detail payment',
+        description:
+          'Mengambil detail payment tertentu untuk order. Membutuhkan permission `payment:read`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam, paymentIdParam],
+        responses: {
+          '200': {
+            description: 'Detail payment berhasil diambil',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Detail payment berhasil diambil',
+                    },
+                    data: paymentResponseSchema,
+                  },
+                },
+              },
+            },
+          },
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': paymentDetailNotFoundResponse,
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
+    '/v1/orders/payments/midtrans/webhook': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Webhook Midtrans',
+        description:
+          'Endpoint webhook publik untuk menerima update status transaksi dari Midtrans. Signature diverifikasi menggunakan server key.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  order_id: {
+                    type: 'string',
+                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                  },
+                  status_code: { type: 'string', example: '200' },
+                  gross_amount: { type: 'string', example: '55000' },
+                  transaction_status: { type: 'string', example: 'settlement' },
+                  fraud_status: { type: 'string', example: 'accept' },
+                  signature_key: { type: 'string', example: 'sha512-hash' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': {
+            description: 'Webhook diterima',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: { type: 'string', example: 'Webhook diterima' },
+                  },
+                },
+              },
+            },
+          },
+          '400': paymentWebhookInvalidPayloadResponse,
+          '401': paymentWebhookSignatureInvalidResponse,
+          '422': paymentAmountMismatchResponse,
           '500': internalServerErrorResponse,
         },
       },
