@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config';
 import { asyncHandler } from '../../common/middlewares/async-handler';
 import { validateRequest } from '../../common/middlewares/validate-request';
+import { buildPermissionMiddleware } from '../../common/middlewares/require-permission';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthRepository } from './repositories/auth.repository';
@@ -25,11 +26,18 @@ export const buildAuthRouter = ({
   const repository = new AuthRepository(knex);
   const service = new AuthService(repository, config, logger);
   const controller = new AuthController(service);
+  const requirePermission = buildPermissionMiddleware(config, logger);
 
   router.post(
     '/login',
     validateRequest(LoginDto),
     asyncHandler((req, res) => controller.login(req, res)),
+  );
+
+  router.get(
+    '/me',
+    requirePermission(),
+    asyncHandler((req, res) => controller.me(req, res)),
   );
 
   return router;

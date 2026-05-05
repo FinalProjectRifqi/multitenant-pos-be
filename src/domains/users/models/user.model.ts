@@ -7,6 +7,7 @@ export interface UserRow {
   last_login_at: Date;
   role_id: string | null;
   role_name: string | null;
+  role_code: string | null;
 }
 
 export interface RawUserStats {
@@ -37,6 +38,7 @@ export interface UserResponse {
   email: string;
   role_id: string | null;
   role_name: string | null;
+  role_code: string | null;
   status: 'active' | 'inactive';
   last_login: Date;
   business_units: BusinessUnitRef[];

@@ -6,8 +6,10 @@ export type { IAuthRepository } from './repositories/auth.repository';
 export { LoginDto } from './dto/login.dto';
 export type {
   UserWithRole,
+  UserForMe,
   JwtTokenPayload,
   LoginResponse,
+  MeResponse,
 } from './models/auth.model';
 export {
   authInvalidCredentialsError,
