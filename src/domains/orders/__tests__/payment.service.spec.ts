@@ -241,7 +241,7 @@ describe('PaymentService', () => {
     it('throws when signature invalid', async () => {
       await expect(
         service.handleMidtransWebhook({
-          order_id: 'PAY-ORD-20250115-0001-20250115103045',
+          reference_number: 'PAY-ORD-20250115-0001-20250115103045',
           status_code: '200',
           gross_amount: '55000',
           transaction_status: 'pending',
@@ -265,7 +265,7 @@ describe('PaymentService', () => {
       );
 
       const result = await service.handleMidtransWebhook({
-        order_id: orderId,
+        reference_number: orderId,
         status_code: '200',
         gross_amount: '55000',
         transaction_status: 'settlement',
@@ -292,7 +292,7 @@ describe('PaymentService', () => {
 
       await expect(
         service.handleMidtransWebhook({
-          order_id: orderId,
+          reference_number: orderId,
           status_code: '200',
           gross_amount: '55000',
           transaction_status: 'pending',

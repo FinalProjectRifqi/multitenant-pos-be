@@ -73,6 +73,7 @@ export interface PaymentCashlessCreateApiResponse {
     payment: PaymentResponse;
     snap_token: string;
     redirect_url: string;
+    webhook_signature_key: string;
   };
 }
 

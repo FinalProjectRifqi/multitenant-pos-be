@@ -207,6 +207,12 @@ const paymentCashlessResponseSchema = {
       type: 'string',
       example: 'https://app.sandbox.midtrans.com/snap/v2/vtweb/abc',
     },
+    webhook_signature_key: {
+      type: 'string',
+      example: 'sha512-hash',
+      description:
+        'Signature key untuk validasi webhook Midtrans. Signature dihitung dengan status_code=200 dan gross_amount=amount.',
+    },
   },
 };
 
@@ -1307,7 +1313,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Buat payment cashless (Midtrans Snap)',
         description:
-          'Membuat payment cashless untuk order yang berstatus "siap". Mengembalikan snap_token dan redirect_url dari Midtrans. Membutuhkan permission `payment:process`.',
+          'Membuat payment cashless untuk order yang berstatus "siap". Mengembalikan snap_token, redirect_url, dan webhook_signature_key dari Midtrans flow agar frontend dapat langsung menggunakan nilai signature untuk kebutuhan validasi/testing. Membutuhkan permission `payment:process`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         requestBody: {
@@ -1478,15 +1484,22 @@ export const ordersSwaggerDoc = {
               schema: {
                 type: 'object',
                 properties: {
-                  order_id: {
+                  reference_number: {
                     type: 'string',
                     example: 'PAY-ORD-20250115-0001-20250115103045',
+                    description:
+                      'Gunakan nilai `payment.reference_number` dari response create cashless payment.',
                   },
                   status_code: { type: 'string', example: '200' },
                   gross_amount: { type: 'string', example: '55000' },
                   transaction_status: { type: 'string', example: 'settlement' },
                   fraud_status: { type: 'string', example: 'accept' },
-                  signature_key: { type: 'string', example: 'sha512-hash' },
+                  signature_key: {
+                    type: 'string',
+                    example: 'sha512-hash',
+                    description:
+                      'Signature SHA-512 Midtrans dengan format: reference_number + status_code + gross_amount + server_key.',
+                  },
                 },
               },
             },

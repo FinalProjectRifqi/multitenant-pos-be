@@ -38,7 +38,7 @@ interface MidtransSnapResponse {
 }
 
 interface MidtransWebhookPayload {
-  order_id?: string;
+  reference_number?: string;
   status_code?: string;
   gross_amount?: string;
   transaction_status?: string;
@@ -170,6 +170,13 @@ export class PaymentService {
         'Cashless payment created successfully',
       );
 
+      const grossAmount = this.formatGrossAmount(dto.amount);
+      const webhookSignatureKey = this.buildMidtransSignature(
+        referenceNumber,
+        '200',
+        grossAmount,
+      );
+
       return {
         success: true,
         statusCode: 201,
@@ -178,6 +185,7 @@ export class PaymentService {
           payment: this.mapToResponse(payment),
           snap_token: snapResult.token,
           redirect_url: snapResult.redirect_url,
+          webhook_signature_key: webhookSignatureKey,
         },
       };
     } catch (error) {
@@ -420,37 +428,47 @@ export class PaymentService {
   ): Promise<PaymentWebhookApiResponse> {
     try {
       this.logger.info(
-        { orderId: payload.order_id, status: payload.transaction_status },
+        {
+          referenceNumber: payload.reference_number,
+          status: payload.transaction_status,
+        },
         'Handling Midtrans webhook',
       );
 
-      const { order_id, status_code, gross_amount, signature_key } = payload;
+      const { reference_number, status_code, gross_amount, signature_key } =
+        payload;
 
-      if (!order_id || !status_code || !gross_amount || !signature_key) {
+      if (
+        !reference_number ||
+        !status_code ||
+        !gross_amount ||
+        !signature_key
+      ) {
         this.logger.warn({ payload }, 'Webhook payload missing fields');
         throw paymentWebhookInvalidPayloadError();
       }
 
-      const expectedSignature = this.buildMidtransSignature(
-        order_id,
-        status_code,
-        gross_amount,
-      );
-
-      if (signature_key !== expectedSignature) {
+      if (
+        !this.isValidMidtransSignature(
+          reference_number,
+          status_code,
+          gross_amount,
+          signature_key,
+        )
+      ) {
         this.logger.warn(
-          { orderId: order_id },
+          { referenceNumber: reference_number, grossAmount: gross_amount },
           'Webhook signature verification failed',
         );
         throw paymentWebhookSignatureInvalidError();
       }
 
       const payment =
-        await this.paymentRepository.findByReferenceNumber(order_id);
+        await this.paymentRepository.findByReferenceNumber(reference_number);
 
       if (!payment) {
         this.logger.warn(
-          { orderId: order_id },
+          { referenceNumber: reference_number },
           'Webhook ignored - payment not found',
         );
         return {
@@ -465,7 +483,10 @@ export class PaymentService {
       const nextStatus = this.mapMidtransStatus(payload);
       if (!nextStatus) {
         this.logger.warn(
-          { orderId: order_id, status: payload.transaction_status },
+          {
+            referenceNumber: reference_number,
+            status: payload.transaction_status,
+          },
           'Webhook ignored - unhandled status',
         );
         return {
@@ -477,7 +498,7 @@ export class PaymentService {
 
       if (this.isFinalStatus(payment.payment_status)) {
         this.logger.info(
-          { orderId: order_id, status: payment.payment_status },
+          { referenceNumber: reference_number, status: payment.payment_status },
           'Webhook ignored - payment already final',
         );
         return {
@@ -498,7 +519,7 @@ export class PaymentService {
       });
 
       this.logger.info(
-        { orderId: order_id, status: nextStatus },
+        { referenceNumber: reference_number, status: nextStatus },
         'Webhook processed successfully',
       );
 
@@ -510,7 +531,7 @@ export class PaymentService {
     } catch (error) {
       if (error instanceof AppError) throw error;
       this.logger.error(
-        { err: error, orderId: payload.order_id },
+        { err: error, referenceNumber: payload.reference_number },
         'Unexpected error while handling webhook',
       );
       throw new AppError({
@@ -559,7 +580,7 @@ export class PaymentService {
       const payload = {
         transaction_details: {
           order_id: referenceNumber,
-          gross_amount: Math.round(Number(amount)),
+          gross_amount: Number(this.formatGrossAmount(amount)),
         },
         customer_details: {
           first_name: customerName,
@@ -621,6 +642,47 @@ export class PaymentService {
   ): string {
     const raw = `${orderId}${statusCode}${grossAmount}${this.config.midtrans.serverKey}`;
     return crypto.createHash('sha512').update(raw).digest('hex');
+  }
+
+  private isValidMidtransSignature(
+    orderId: string,
+    statusCode: string,
+    grossAmountRaw: string,
+    providedSignature: string,
+  ): boolean {
+    const candidates = new Set<string>([grossAmountRaw]);
+    const normalizedNumber = Number(grossAmountRaw);
+
+    if (Number.isFinite(normalizedNumber)) {
+      candidates.add(this.formatGrossAmount(normalizedNumber));
+      candidates.add(normalizedNumber.toFixed(2));
+    }
+
+    for (const grossAmount of candidates) {
+      const expected = this.buildMidtransSignature(
+        orderId,
+        statusCode,
+        grossAmount,
+      );
+      if (this.safeEqual(expected, providedSignature)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private safeEqual(a: string, b: string): boolean {
+    const left = Buffer.from(a);
+    const right = Buffer.from(b);
+    if (left.length !== right.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(left, right);
+  }
+
+  private formatGrossAmount(amount: number): string {
+    return Number(amount).toFixed(2);
   }
 
   private mapMidtransStatus(
