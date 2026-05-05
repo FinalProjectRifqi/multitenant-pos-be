@@ -1,4 +1,4 @@
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsUUID } from 'class-validator';
 
 export class InventarisBusinessIdParamsDto {
   @IsUUID('4', { message: 'businessId harus berupa UUID yang valid' })
@@ -10,6 +10,5 @@ export class InventarisItemParamsDto {
   businessId!: string;
 
   @IsUUID('4', { message: 'inventoryItemId harus berupa UUID yang valid' })
-  @IsOptional()
-  inventoryItemId?: string;
+  inventoryItemId!: string;
 }

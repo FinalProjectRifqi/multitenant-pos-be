@@ -51,10 +51,4 @@ export class CreateInventarisItemDto {
   @IsInt({ message: 'Batas maksimum harus berupa bilangan bulat' })
   @Min(1, { message: 'Batas maksimum minimal 1' })
   max_threshold!: number;
-
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim() : value,
-  )
-  last_restocked_at?: string;
 }

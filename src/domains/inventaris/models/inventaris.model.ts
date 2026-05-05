@@ -20,6 +20,7 @@ export interface InventoryStats {
   total_inventory_item: number;
   inventory_item_low_stock: number;
   inventory_item_normal_stock: number;
+  inventory_item_out_of_stock: number;
 }
 
 export interface InventoryTransaction {

@@ -5,6 +5,7 @@ import type { CreateInventarisItemDto } from './dto/create-inventaris-item.dto';
 import type { UpdateInventarisItemDto } from './dto/update-inventaris-item.dto';
 import type { ListInventoryTransactionsQueryDto } from './dto/list-inventory-transactions-query.dto';
 import type { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
+import { authTokenInvalidError } from '../auth/errors/auth.errors';
 
 export class InventarisController {
   constructor(private readonly service: InventarisService) {}
@@ -64,9 +65,14 @@ export class InventarisController {
   }
 
   async createTransaction(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw authTokenInvalidError();
+    }
+
     const result = await this.service.createTransaction(
       req.params.businessId,
-      req.user?.sub ?? '',
+      userId,
       req.body as CreateInventoryTransactionDto,
     );
     res.status(result.statusCode).json(result);

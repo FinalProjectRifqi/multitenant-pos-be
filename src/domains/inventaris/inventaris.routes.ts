@@ -37,7 +37,7 @@ export const buildInventarisRouter = ({
   const controller = new InventarisController(service);
 
   router.get(
-    '/:businessId',
+    '/:businessId/items',
     requirePermission('inventory:read'),
     validateRequest(InventarisBusinessIdParamsDto, 'params'),
     validateRequest(ListInventarisQueryDto, 'query'),
@@ -52,7 +52,7 @@ export const buildInventarisRouter = ({
   );
 
   router.post(
-    '/:businessId',
+    '/:businessId/items',
     requirePermission(['inventory:read', 'inventory:create']),
     validateRequest(InventarisBusinessIdParamsDto, 'params'),
     validateRequest(CreateInventarisItemDto),
@@ -76,14 +76,14 @@ export const buildInventarisRouter = ({
   );
 
   router.get(
-    '/:businessId/:inventoryItemId',
+    '/:businessId/items/:inventoryItemId',
     requirePermission('inventory:read'),
     validateRequest(InventarisItemParamsDto, 'params'),
     asyncHandler((req, res) => controller.getItemById(req, res)),
   );
 
   router.patch(
-    '/:businessId/:inventoryItemId',
+    '/:businessId/items/:inventoryItemId',
     requirePermission(['inventory:read', 'inventory:update']),
     validateRequest(InventarisItemParamsDto, 'params'),
     validateRequest(UpdateInventarisItemDto),
@@ -91,7 +91,7 @@ export const buildInventarisRouter = ({
   );
 
   router.delete(
-    '/:businessId/:inventoryItemId',
+    '/:businessId/items/:inventoryItemId',
     requirePermission(['inventory:read', 'inventory:delete']),
     validateRequest(InventarisItemParamsDto, 'params'),
     asyncHandler((req, res) => controller.deleteItem(req, res)),

@@ -91,6 +91,7 @@ const inventoryStatsSchema = {
     total_inventory_item: { type: 'integer', example: 42 },
     inventory_item_low_stock: { type: 'integer', example: 7 },
     inventory_item_normal_stock: { type: 'integer', example: 35 },
+    inventory_item_out_of_stock: { type: 'integer', example: 3 },
   },
 };
 
@@ -387,7 +388,7 @@ const internalServerErrorResponse = {
   },
 };
 
-const inventoryItemFormFields = {
+const createInventoryItemFormFields = {
   inventory_item_name: {
     type: 'string',
     maxLength: 255,
@@ -423,6 +424,14 @@ const inventoryItemFormFields = {
     example: 150,
     description: 'Batas maksimum stok (minimal 1)',
   },
+};
+
+const updateInventoryItemFormFields = {
+  inventory_item_name: createInventoryItemFormFields.inventory_item_name,
+  description: createInventoryItemFormFields.description,
+  unit_of_measure: createInventoryItemFormFields.unit_of_measure,
+  min_threshold: createInventoryItemFormFields.min_threshold,
+  max_threshold: createInventoryItemFormFields.max_threshold,
 };
 
 const createInventoryTransactionFields = {
@@ -461,7 +470,7 @@ export const inventarisSwaggerDoc = {
     },
   ],
   paths: {
-    '/v1/inventaris/{businessId}': {
+    '/v1/inventaris/{businessId}/items': {
       get: {
         tags: ['Inventaris'],
         summary: 'Ambil daftar item inventaris',
@@ -579,7 +588,7 @@ export const inventarisSwaggerDoc = {
                   'min_threshold',
                   'max_threshold',
                 ],
-                properties: inventoryItemFormFields,
+                properties: createInventoryItemFormFields,
               },
             },
           },
@@ -648,7 +657,7 @@ export const inventarisSwaggerDoc = {
         },
       },
     },
-    '/v1/inventaris/{businessId}/{inventoryItemId}': {
+    '/v1/inventaris/{businessId}/items/{inventoryItemId}': {
       get: {
         tags: ['Inventaris'],
         summary: 'Ambil detail item inventaris',
@@ -686,7 +695,7 @@ export const inventarisSwaggerDoc = {
         tags: ['Inventaris'],
         summary: 'Perbarui item inventaris (partial)',
         description:
-          'Memperbarui data item inventaris secara parsial. Minimal satu field harus dikirim. Field `last_restocked_at` tidak dapat di-set manual dari request update item. Membutuhkan permission `inventory:read` dan `inventory:update`.',
+          'Memperbarui data item inventaris secara parsial. Minimal satu field harus dikirim. Field `current_stock` tidak dapat diubah langsung dan harus melalui endpoint transaksi inventaris. Membutuhkan permission `inventory:read` dan `inventory:update`.',
         security: bearerSecurity,
         parameters: [businessIdParam, inventoryItemIdParam],
         requestBody: {
@@ -695,7 +704,7 @@ export const inventarisSwaggerDoc = {
             'application/json': {
               schema: {
                 type: 'object',
-                properties: inventoryItemFormFields,
+                properties: updateInventoryItemFormFields,
               },
             },
           },

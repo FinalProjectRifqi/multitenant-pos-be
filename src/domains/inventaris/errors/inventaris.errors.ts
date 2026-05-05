@@ -32,13 +32,3 @@ export const inventoryInsufficientStockError = (details?: unknown): AppError =>
     status: 400,
     details,
   });
-
-export const inventoryInvalidTransactionTypeError = (
-  details?: unknown,
-): AppError =>
-  new AppError({
-    code: DomainErrorCodes.InventoryInvalidTransactionType,
-    message: 'Tipe transaksi inventaris tidak valid',
-    status: 400,
-    details,
-  });

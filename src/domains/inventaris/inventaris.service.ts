@@ -7,7 +7,6 @@ import type { ListInventarisQueryDto } from './dto/list-inventaris-query.dto';
 import type { ListInventoryTransactionsQueryDto } from './dto/list-inventory-transactions-query.dto';
 import type { UpdateInventarisItemDto } from './dto/update-inventaris-item.dto';
 import {
-  inventoryInsufficientStockError,
   inventoryItemConflictError,
   inventoryItemNotFoundError,
   inventoryUnitNotFoundError,
@@ -172,6 +171,7 @@ export class InventarisService {
     try {
       await this.assertUnitExists(businessId);
       this.assertUpdatePayload(dto);
+      this.assertStockUpdatePolicy(dto);
 
       const currentItem = await this.repository.findById(
         businessId,
@@ -203,7 +203,6 @@ export class InventarisService {
         inventory_item_name: dto.inventory_item_name,
         description: dto.description,
         unit_of_measure: dto.unit_of_measure,
-        current_stock: dto.current_stock,
         min_threshold: dto.min_threshold,
         max_threshold: dto.max_threshold,
       });
@@ -341,28 +340,6 @@ export class InventarisService {
     try {
       await this.assertUnitExists(businessId);
 
-      const item = await this.repository.findById(
-        businessId,
-        dto.inventory_item_id,
-      );
-      if (!item) {
-        throw inventoryItemNotFoundError({
-          businessId,
-          inventoryItemId: dto.inventory_item_id,
-        });
-      }
-
-      if (
-        dto.transaction_type === 'out' &&
-        item.current_stock < dto.quantity_changed
-      ) {
-        throw inventoryInsufficientStockError({
-          inventory_item_id: dto.inventory_item_id,
-          current_stock: item.current_stock,
-          requested: dto.quantity_changed,
-        });
-      }
-
       const data = await this.repository.createTransaction({
         businessId,
         user_id: userId,
@@ -419,6 +396,17 @@ export class InventarisService {
       throw new AppError({
         code: ErrorCodes.ValidationFailed,
         message: 'Tidak ada data yang dikirim untuk diperbarui',
+        status: 400,
+      });
+    }
+  }
+
+  private assertStockUpdatePolicy(dto: UpdateInventarisItemDto): void {
+    if (dto.current_stock !== undefined) {
+      throw new AppError({
+        code: ErrorCodes.ValidationFailed,
+        message:
+          'Stok saat ini tidak dapat diperbarui langsung. Gunakan endpoint transaksi inventaris.',
         status: 400,
       });
     }

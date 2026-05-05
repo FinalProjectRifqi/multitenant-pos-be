@@ -4,6 +4,7 @@ import type {
   InventoryStats,
   InventoryTransaction,
 } from '../models/inventaris.model';
+import { inventoryInsufficientStockError } from '../errors/inventaris.errors';
 
 export type InventorySortByColumn =
   | 'inventory_item_name'
@@ -43,7 +44,6 @@ export interface UpdateInventoryItemData {
   inventory_item_name?: string;
   description?: string;
   unit_of_measure?: string;
-  current_stock?: number;
   min_threshold?: number;
   max_threshold?: number;
 }
@@ -303,9 +303,6 @@ export class InventarisRepository implements IInventarisRepository {
       if (data.unit_of_measure !== undefined) {
         patchPayload.unit_of_measure = data.unit_of_measure;
       }
-      if (data.current_stock !== undefined) {
-        patchPayload.current_stock = data.current_stock;
-      }
       if (data.min_threshold !== undefined) {
         patchPayload.min_threshold = data.min_threshold;
       }
@@ -421,11 +418,26 @@ export class InventarisRepository implements IInventarisRepository {
           ) as inventory_item_normal_stock`,
         ),
       )
+      .select(
+        this.db.raw(
+          `COALESCE(
+            SUM(
+              CASE
+                WHEN ii.current_stock = 0
+                THEN 1
+                ELSE 0
+              END
+            ),
+            0
+          ) as inventory_item_out_of_stock`,
+        ),
+      )
       .first<
         | {
             total_inventory_item: string | number;
             inventory_item_low_stock: string | number;
             inventory_item_normal_stock: string | number;
+            inventory_item_out_of_stock: string | number;
           }
         | undefined
       >();
@@ -435,6 +447,9 @@ export class InventarisRepository implements IInventarisRepository {
       inventory_item_low_stock: Number(row?.inventory_item_low_stock ?? 0),
       inventory_item_normal_stock: Number(
         row?.inventory_item_normal_stock ?? 0,
+      ),
+      inventory_item_out_of_stock: Number(
+        row?.inventory_item_out_of_stock ?? 0,
       ),
     };
   }
@@ -538,6 +553,17 @@ export class InventarisRepository implements IInventarisRepository {
         >();
 
       if (!item) return null;
+
+      if (
+        data.transaction_type === 'out' &&
+        item.current_stock < data.quantity_changed
+      ) {
+        throw inventoryInsufficientStockError({
+          inventory_item_id: data.inventory_item_id,
+          current_stock: item.current_stock,
+          requested: data.quantity_changed,
+        });
+      }
 
       let quantityAfter = item.current_stock;
       if (data.transaction_type === 'in') {
