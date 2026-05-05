@@ -44,8 +44,10 @@ export interface UpdateInventoryItemData {
   inventory_item_name?: string;
   description?: string;
   unit_of_measure?: string;
+  current_stock?: number;
   min_threshold?: number;
   max_threshold?: number;
+  updated_by_user_id: string;
 }
 
 export interface CreateInventoryTransactionData {
@@ -281,14 +283,33 @@ export class InventarisRepository implements IInventarisRepository {
     data: UpdateInventoryItemData,
   ): Promise<InventoryItemWithUnit | null> {
     return this.db.transaction(async (trx) => {
-      const linked = await trx('inventory_items_units')
-        .where({ unit_id: businessId, inventory_item_id: inventoryItemId })
-        .whereNull('deleted_at')
-        .first();
+      const currentItem = await trx('inventory_items as ii')
+        .innerJoin('inventory_items_units as iiu', function () {
+          this.on(
+            'ii.inventory_item_id',
+            '=',
+            'iiu.inventory_item_id',
+          ).andOnNull('iiu.deleted_at');
+        })
+        .select([
+          'ii.inventory_item_id',
+          'ii.inventory_item_name',
+          'ii.current_stock',
+        ])
+        .where('iiu.unit_id', businessId)
+        .where('ii.inventory_item_id', inventoryItemId)
+        .whereNull('ii.deleted_at')
+        .forUpdate()
+        .first<
+          | {
+              inventory_item_id: string;
+              inventory_item_name: string;
+              current_stock: number;
+            }
+          | undefined
+        >();
 
-      if (!linked) {
-        return null;
-      }
+      if (!currentItem) return null;
 
       const patchPayload: Record<string, unknown> = {
         updated_at: trx.fn.now(),
@@ -302,6 +323,12 @@ export class InventarisRepository implements IInventarisRepository {
       }
       if (data.unit_of_measure !== undefined) {
         patchPayload.unit_of_measure = data.unit_of_measure;
+      }
+      if (data.current_stock !== undefined) {
+        patchPayload.current_stock = data.current_stock;
+        if (data.current_stock !== currentItem.current_stock) {
+          patchPayload.last_restocked_at = trx.fn.now();
+        }
       }
       if (data.min_threshold !== undefined) {
         patchPayload.min_threshold = data.min_threshold;
@@ -334,6 +361,24 @@ export class InventarisRepository implements IInventarisRepository {
         .first<InventoryItemWithUnit | undefined>();
 
       if (!row) return null;
+
+      if (
+        data.current_stock !== undefined &&
+        data.current_stock !== currentItem.current_stock
+      ) {
+        const isIncrease = data.current_stock > currentItem.current_stock;
+        await trx('inventory_transactions').insert({
+          user_id: data.updated_by_user_id,
+          inventory_item_id: inventoryItemId,
+          transaction_type: isIncrease ? 'in' : 'out',
+          quantity_changed: Math.abs(
+            data.current_stock - currentItem.current_stock,
+          ),
+          quantity_before: currentItem.current_stock,
+          quantity_after: data.current_stock,
+          notes: 'Penyesuaian stok melalui pembaruan item inventaris',
+        });
+      }
 
       return {
         ...row,

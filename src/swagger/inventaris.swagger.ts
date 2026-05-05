@@ -430,6 +430,7 @@ const updateInventoryItemFormFields = {
   inventory_item_name: createInventoryItemFormFields.inventory_item_name,
   description: createInventoryItemFormFields.description,
   unit_of_measure: createInventoryItemFormFields.unit_of_measure,
+  current_stock: createInventoryItemFormFields.current_stock,
   min_threshold: createInventoryItemFormFields.min_threshold,
   max_threshold: createInventoryItemFormFields.max_threshold,
 };
@@ -695,7 +696,7 @@ export const inventarisSwaggerDoc = {
         tags: ['Inventaris'],
         summary: 'Perbarui item inventaris (partial)',
         description:
-          'Memperbarui data item inventaris secara parsial. Minimal satu field harus dikirim. Field `current_stock` tidak dapat diubah langsung dan harus melalui endpoint transaksi inventaris. Membutuhkan permission `inventory:read` dan `inventory:update`.',
+          'Memperbarui data item inventaris secara parsial. Minimal satu field harus dikirim. Jika field `current_stock` diubah, sistem akan otomatis mencatat transaksi inventaris bertipe `in` atau `out` berdasarkan selisih stok, serta memperbarui `last_restocked_at`. Membutuhkan permission `inventory:read` dan `inventory:update`.',
         security: bearerSecurity,
         parameters: [businessIdParam, inventoryItemIdParam],
         requestBody: {

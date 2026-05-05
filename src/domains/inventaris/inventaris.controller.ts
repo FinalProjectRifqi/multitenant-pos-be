@@ -35,9 +35,15 @@ export class InventarisController {
   }
 
   async updateItem(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw authTokenInvalidError();
+    }
+
     const result = await this.service.updateItem(
       req.params.businessId,
       req.params.inventoryItemId,
+      userId,
       req.body as UpdateInventarisItemDto,
     );
     res.status(result.statusCode).json(result);

@@ -166,12 +166,12 @@ export class InventarisService {
   async updateItem(
     businessId: string,
     inventoryItemId: string,
+    userId: string,
     dto: UpdateInventarisItemDto,
   ): Promise<InventoryItemDetailResponse> {
     try {
       await this.assertUnitExists(businessId);
       this.assertUpdatePayload(dto);
-      this.assertStockUpdatePolicy(dto);
 
       const currentItem = await this.repository.findById(
         businessId,
@@ -203,8 +203,10 @@ export class InventarisService {
         inventory_item_name: dto.inventory_item_name,
         description: dto.description,
         unit_of_measure: dto.unit_of_measure,
+        current_stock: dto.current_stock,
         min_threshold: dto.min_threshold,
         max_threshold: dto.max_threshold,
+        updated_by_user_id: userId,
       });
       if (!data) {
         throw inventoryItemNotFoundError({ businessId, inventoryItemId });
@@ -219,7 +221,7 @@ export class InventarisService {
     } catch (error) {
       if (error instanceof AppError) throw error;
       this.logger.error(
-        { err: error, businessId, inventoryItemId, dto },
+        { err: error, businessId, inventoryItemId, userId, dto },
         'Unexpected error while updating inventory item',
       );
       throw new AppError({
@@ -396,17 +398,6 @@ export class InventarisService {
       throw new AppError({
         code: ErrorCodes.ValidationFailed,
         message: 'Tidak ada data yang dikirim untuk diperbarui',
-        status: 400,
-      });
-    }
-  }
-
-  private assertStockUpdatePolicy(dto: UpdateInventarisItemDto): void {
-    if (dto.current_stock !== undefined) {
-      throw new AppError({
-        code: ErrorCodes.ValidationFailed,
-        message:
-          'Stok saat ini tidak dapat diperbarui langsung. Gunakan endpoint transaksi inventaris.',
         status: 400,
       });
     }
