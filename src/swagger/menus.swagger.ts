@@ -47,8 +47,7 @@ const menuResponseSchema = {
     menu_image: {
       type: 'string',
       nullable: true,
-      example:
-        'https://storage.example.com/menus/uuid/image.jpg?token=xxx',
+      example: 'https://storage.example.com/menus/uuid/image.jpg?token=xxx',
     },
     business_unit_id: {
       type: 'string',
@@ -87,8 +86,7 @@ const menuMutationResponseSchema = {
     menu_image: {
       type: 'string',
       nullable: true,
-      example:
-        'https://storage.example.com/menus/uuid/image.jpg?token=xxx',
+      example: 'https://storage.example.com/menus/uuid/image.jpg?token=xxx',
     },
     is_available: { type: 'boolean', example: true },
   },
@@ -328,7 +326,8 @@ export const menusSwaggerDoc = {
             name: 'search',
             in: 'query',
             required: false,
-            description: 'Kata kunci pencarian pada nama menu atau nama kategori (case-insensitive)',
+            description:
+              'Kata kunci pencarian pada nama menu atau nama kategori (case-insensitive)',
             schema: { type: 'string', example: 'nasi' },
           },
           {
@@ -366,7 +365,8 @@ export const menusSwaggerDoc = {
             name: 'limit',
             in: 'query',
             required: false,
-            description: 'Jumlah data per halaman (default: 10, minimal: 1, maksimal: 100)',
+            description:
+              'Jumlah data per halaman (default: 10, minimal: 1, maksimal: 100)',
             schema: {
               type: 'integer',
               minimum: 1,
@@ -425,7 +425,12 @@ export const menusSwaggerDoc = {
             'multipart/form-data': {
               schema: {
                 type: 'object',
-                required: ['menu_name', 'menu_category_id', 'item_price', 'is_available'],
+                required: [
+                  'menu_name',
+                  'menu_category_id',
+                  'item_price',
+                  'is_available',
+                ],
                 properties: menuFormFields,
               },
             },
@@ -441,7 +446,10 @@ export const menusSwaggerDoc = {
                   properties: {
                     success: { type: 'boolean', example: true },
                     statusCode: { type: 'number', example: 201 },
-                    message: { type: 'string', example: 'Menu berhasil dibuat' },
+                    message: {
+                      type: 'string',
+                      example: 'Menu berhasil dibuat',
+                    },
                     data: menuMutationResponseSchema,
                   },
                 },
