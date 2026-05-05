@@ -5,6 +5,7 @@ import swaggerUi from 'swagger-ui-express';
 import type { AppConfig } from './index';
 import { healthSwaggerDoc } from '../swagger/health.swagger';
 import { ordersSwaggerDoc } from '../swagger/orders.swagger';
+import { orderTypeSwaggerDoc } from '../swagger/order-type';
 import { authSwaggerDoc } from '../swagger/auth.swagger';
 import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
 import { roleSwaggerDoc } from '../swagger/role.swagger';
@@ -70,6 +71,7 @@ const buildOpenApiDocument = () => {
   const routeDocs = [
     healthSwaggerDoc,
     ordersSwaggerDoc,
+    orderTypeSwaggerDoc,
     authSwaggerDoc,
     businessUnitsSwaggerDoc,
     roleSwaggerDoc,
