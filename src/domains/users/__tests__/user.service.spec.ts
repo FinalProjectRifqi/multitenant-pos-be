@@ -58,7 +58,6 @@ const createUserWithDetails = (
   last_login_at: new Date(),
   role_id: VALID_UUID_2,
   role_name: 'Kasir',
-  role_code: 'UNIT_STAFF',
   business_units: [
     { business_unit_id: VALID_UUID, business_unit_name: 'Toko A' },
   ],

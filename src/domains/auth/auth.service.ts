@@ -141,11 +141,6 @@ export class AuthService {
         throw authInactiveAccountError();
       }
 
-      const permissions = user.role_id
-        ? await this.repository.getUserPermissions(user.role_id)
-        : jwtPayload.permission;
-      const roleCode = user.role_code ?? jwtPayload.roles;
-
       this.logger.debug({ userId: user.user_id }, 'getMe successful');
 
       return {
@@ -159,11 +154,11 @@ export class AuthService {
           email: user.email,
           role_id: user.role_id,
           role_name: user.role_name,
-          role_code: roleCode,
+          role_code: jwtPayload.roles,
           status: user.is_active ? 'active' : 'inactive',
           last_login: user.last_login_at,
           business_units: user.business_units,
-          permissions,
+          permissions: jwtPayload.permission,
           must_change_password: jwtPayload.must_change_password,
         },
       };
