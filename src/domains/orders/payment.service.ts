@@ -626,7 +626,7 @@ export class PaymentService {
 
       return {
         token: data.token,
-        redirect_url: data.redirect_url,
+        redirect_url: `${data.redirect_url}#/other-qris`,
       };
     } catch (error) {
       if (error instanceof AppError) throw error;
