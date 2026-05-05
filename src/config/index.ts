@@ -5,13 +5,11 @@ import { getLoggerConfig, type LoggerConfig } from './logger.config';
 import { getCorsConfig, type CorsConfig } from './cors.config';
 import { getStorageConfig, type StorageConfig } from './storage.config';
 
-export type {
-  NodeEnv,
-  DatabaseConfig,
-  LoggerConfig,
-  CorsConfig,
-  StorageConfig,
-};
+export type { NodeEnv } from './types';
+export type { DatabaseConfig } from './database.config';
+export type { LoggerConfig } from './logger.config';
+export type { CorsConfig } from './cors.config';
+export type { StorageConfig } from './storage.config';
 
 export interface JwtConfig {
   secret: string;
@@ -21,6 +19,15 @@ export interface JwtConfig {
 export interface OrderConfig {
   pendingStatusUuid: string;
   cancelStatusUuid: string;
+  readyStatusUuid: string;
+}
+
+export interface MidtransConfig {
+  serverKey: string;
+  clientKey: string;
+  merchantId: string;
+  snapBaseUrl: string;
+  isProduction: boolean;
 }
 
 export interface AppConfig {
@@ -33,6 +40,7 @@ export interface AppConfig {
   bcryptSaltRounds: number;
   storage: StorageConfig;
   order: OrderConfig;
+  midtrans: MidtransConfig;
   isLocalEnv: boolean;
   isDevelopmentEnv: boolean;
   isProductionEnv: boolean;
@@ -50,6 +58,10 @@ export const getAppConfig = (): AppConfig => {
     BCRYPT_SALT_ROUNDS: num({ default: 12 }),
     PENDING_ORDER_STATUS_UUID: str(),
     CANCEL_ORDER_STATUS_UUID: str(),
+    READY_ORDER_STATUS_UUID: str(),
+    CLIENT_SECRET_KEY: str(),
+    SERVER_SECRET_KEY: str(),
+    MERCHANT_ID: str(),
   });
 
   const nodeEnv = env.NODE_ENV as NodeEnv;
@@ -74,6 +86,17 @@ export const getAppConfig = (): AppConfig => {
     order: {
       pendingStatusUuid: env.PENDING_ORDER_STATUS_UUID,
       cancelStatusUuid: env.CANCEL_ORDER_STATUS_UUID,
+      readyStatusUuid: env.READY_ORDER_STATUS_UUID,
+    },
+    midtrans: {
+      serverKey: env.SERVER_SECRET_KEY,
+      clientKey: env.CLIENT_SECRET_KEY,
+      merchantId: env.MERCHANT_ID,
+      snapBaseUrl:
+        nodeEnv === 'production'
+          ? 'https://app.midtrans.com/snap/v1'
+          : 'https://app.sandbox.midtrans.com/snap/v1',
+      isProduction: nodeEnv === 'production',
     },
     isLocalEnv: nodeEnv === 'local',
     isDevelopmentEnv: nodeEnv === 'development',

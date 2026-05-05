@@ -40,6 +40,13 @@ export const DomainErrorCodes = {
   InventoryItemConflict: 'INVENTORY_ITEM_CONFLICT',
   InventoryInsufficientStock: 'INVENTORY_INSUFFICIENT_STOCK',
   InventoryInvalidTransactionType: 'INVENTORY_INVALID_TRANSACTION_TYPE',
+  PaymentNotFound: 'PAYMENT_NOT_FOUND',
+  PaymentAlreadyActive: 'PAYMENT_ALREADY_ACTIVE',
+  PaymentOrderNotReady: 'PAYMENT_ORDER_NOT_READY',
+  PaymentAmountMismatch: 'PAYMENT_AMOUNT_MISMATCH',
+  PaymentWebhookSignatureInvalid: 'PAYMENT_WEBHOOK_SIGNATURE_INVALID',
+  PaymentWebhookInvalidPayload: 'PAYMENT_WEBHOOK_INVALID_PAYLOAD',
+  PaymentMidtransRequestFailed: 'PAYMENT_MIDTRANS_REQUEST_FAILED',
 } as const;
 
 export type DomainErrorCode =

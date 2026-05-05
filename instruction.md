@@ -1,22 +1,13 @@
 <context>
 
-Kita akan membuat sebuah fitur order. Jadi, fitur order hanya sampai menambahkan order ke dalam database dan belum sampai tahap payment atau pembayaran.
-
-Pertama-tama kita butuh sebuah endpoint untuk mendapatkan data seluruh pesanan di unit tertentu. Nah nanti endpoint GET All ini akan menampilkan data nomor order, nama pelanggan, nomor meja (kalo tipenya itu bukan dine-in maka null aja), tipe order (with uuid), total harga, status order, waktu order. Di GET All ini juga bisa filter by status, mulai dari tampilin semua status, menunggu, diproses, siap, selesai. Terus ini juga butuh pagination (ikutin di domain yang lain). Lalu, middleware require permission wajib cek apakah ada permission `order:read`.
-
-Lalu, kita juga butuh endpoint untuk masukin data order (POST). Data yang dibutuhkan adalah tipe order (dine in atau takeaway) tapi ini nanti yang dimasukin UUID. Nama pelanggan, nomor meja itu hanya diisi kalau tadi tipe ordernya dine in, kalau takeway itu NULL, menu yang dipesan dan jumlahnya berapa, harga per item, subtotal, pajak, dan total pembayaran atau grand total. Middleware require permission wajib cek apakah ada permission `order:create`.
-
-Nanti juga ada endpoint untuk ubah data order (PATCH). Data yang dibtuuhkan itu sama kaya yang di-POST. Yang membedakan adalah harus dicek dulu apakah status ordernya sudah selesai atau belum. Kalau sudah selesai maka tidak boleh diupdate, kalau belum selesai baru boleh. Middleware require permission wajib cek apakah ada permission `order:read` dan `order:update`.
-
-Kita juga akan membuat endpoint untuk cancel (hapus) order. Yaitu endpointnya (DELETE). Di sini harus cek dulu yaitu selama statusnya belum diproses, maka bisa di-cancel atau hapus. Kalau sudah diproses, itu tidak bisa. Middleware require permission wajib cek apakah  ada permission `order:read` dan `order:delete`.
-
-Kita juga akan membutuhkan endpoint untuk get detail order. Middleware require permission wajib cek apakah ada permission `order:read`.
+Kita akan membuat fitur payment. Jadi, payment ini akan menggunakan midtrans untuk transaksi yang cashless (apapun itu bentuknya). Sedangkan untuk cash ya ga make midtrans.
 
 Kita akan membuatnya di domain orders. Polanya ikuti dari domain auth, business-units, users, menus dan roles. Buatkan juga useful logger di tingkat info, warn, dan error. Kemudian, buatkan juga dokumentasi swaggernya dan taruh di folder src/swagger/orders.swagger.ts. Di swagger nanti, dokumentasinya harus lengkap. Meliputi semua kemungkinan http code di setiap endpoint dan harus ada example responsenya.
 
 Kita akan menggunakan paradigma defensive programming, dimana kita akan menjalankan try catch dulu baru logicnya.
 
 Ini table yang mungkin akan kamu butuhkan
+
 ```sql
 -- public.users definition
 
@@ -384,6 +375,7 @@ CREATE TABLE public.inventory_items (
 	CONSTRAINT inventory_items_pkey PRIMARY KEY (inventory_item_id)
 );
 ```
+
 </context>
 
 <role>
