@@ -14,7 +14,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export class OrderItemInputDto {
+export class UpdateOrderItemInputDto {
+  @IsOptional()
+  @IsUUID('4', { message: 'order_item_id harus berupa UUID yang valid' })
+  order_item_id?: string;
+
   @IsUUID('4', { message: 'menu_item_id harus berupa UUID yang valid' })
   @IsNotEmpty({ message: 'menu_item_id tidak boleh kosong' })
   menu_item_id!: string;
@@ -36,15 +40,16 @@ export class OrderItemInputDto {
   notes?: string;
 }
 
-export class CreateOrderDto {
+export class UpdateOrderDto {
+  @IsOptional()
   @IsUUID('4', { message: 'order_type_id harus berupa UUID yang valid' })
-  @IsNotEmpty({ message: 'order_type_id tidak boleh kosong' })
-  order_type_id!: string;
+  order_type_id?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Nama pelanggan tidak boleh kosong' })
+  @IsNotEmpty({ message: 'Nama pelanggan tidak boleh kosong jika diisi' })
   @MaxLength(255, { message: 'Nama pelanggan maksimal 255 karakter' })
-  customer_name!: string;
+  customer_name?: string;
 
   @IsOptional()
   @IsString()
@@ -56,24 +61,28 @@ export class CreateOrderDto {
   @MaxLength(255, { message: 'notes maksimal 255 karakter' })
   notes?: string;
 
+  @IsOptional()
   @IsArray({ message: 'items harus berupa array' })
-  @ArrayMinSize(1, { message: 'Minimal satu item harus ada dalam order' })
+  @ArrayMinSize(1, { message: 'Minimal satu item harus ada jika items diisi' })
   @ValidateNested({ each: true })
-  @Type(() => OrderItemInputDto)
-  items!: OrderItemInputDto[];
+  @Type(() => UpdateOrderItemInputDto)
+  items?: UpdateOrderItemInputDto[];
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'subtotal harus berupa angka' })
   @Min(0, { message: 'subtotal tidak boleh negatif' })
-  subtotal!: number;
+  subtotal?: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'tax_amount harus berupa angka' })
   @Min(0, { message: 'tax_amount tidak boleh negatif' })
-  tax_amount!: number;
+  tax_amount?: number;
 
+  @IsOptional()
   @Type(() => Number)
   @IsNumber({}, { message: 'total_amount harus berupa angka' })
   @Min(0, { message: 'total_amount tidak boleh negatif' })
-  total_amount!: number;
+  total_amount?: number;
 }
