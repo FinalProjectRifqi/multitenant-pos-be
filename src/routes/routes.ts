@@ -12,6 +12,11 @@ import { buildMenuCategoryRouter } from '../domains/menu-categories/menu-categor
 import { buildInventarisRouter } from '../domains/inventaris/inventaris';
 import { buildOrderRouter } from '../domains/orders/order';
 import { buildOrderTypeRouter } from '../domains/order-types/order-type.routes';
+import { buildKdsOrderStatusRouter } from '../domains/kds-order-status/kds-order-status.routes';
+import {
+  createOrderEventBus,
+  registerOrderEventLogging,
+} from '../common/events/order-event-bus';
 
 export type { RequirePermissionFactory } from '../common/middlewares/require-permission';
 export { buildPermissionMiddleware } from '../common/middlewares/require-permission';
@@ -29,6 +34,9 @@ export const buildApiRouter = ({
 }: ApiRouterDeps): Router => {
   const router = Router();
 
+  const orderEventBus = createOrderEventBus();
+  registerOrderEventLogging(logger, orderEventBus);
+
   router.use('/health', buildHealthRouter({ knex }));
   router.use('/auth', buildAuthRouter({ knex, config, logger }));
   router.use(
@@ -45,6 +53,15 @@ export const buildApiRouter = ({
   router.use('/inventaris', buildInventarisRouter({ knex, config, logger }));
   router.use('/orders', buildOrderRouter({ knex, config, logger }));
   router.use('/order-types', buildOrderTypeRouter({ knex, config, logger }));
+  router.use(
+    '/order-status',
+    buildKdsOrderStatusRouter({
+      knex,
+      config,
+      logger,
+      orderEventBus,
+    }),
+  );
 
   return router;
 };
