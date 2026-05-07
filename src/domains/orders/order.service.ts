@@ -660,14 +660,13 @@ export class OrderService {
         throw orderCannotBeCancelledError();
       }
 
-      // 4. Soft-delete the order and all its items atomically
+      // 4. Mark order as cancelled by status transition only
       await this.repository.transaction(async (trx) => {
-        await this.repository.softDeleteOrder(
+        await this.repository.update(
           orderId,
-          this.config.order.cancelStatusUuid,
+          { order_status_id: this.config.order.cancelStatusUuid },
           trx,
         );
-        await this.repository.softDeleteOrderItemsByOrderId(orderId, trx);
       });
 
       this.logger.info({ unitId, orderId }, 'Order cancelled successfully');

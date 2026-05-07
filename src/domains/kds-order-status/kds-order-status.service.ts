@@ -15,13 +15,13 @@ import type {
   OrderDetailApiResponse,
   OrderCancelApiResponse,
 } from '../orders/models/order.model';
-import type { IOrderRepository } from '../orders/repositories/order.repository';
 import { mapOrderDetailResponse } from '../orders/order-response.mapper';
 import {
   assertKdsOrderStatusTransition,
   resolveStatusCode,
 } from '../orders/order-status-transition';
 import type { KdsOrderStatusTransitionDto } from './dto/kds-order-status-transition.dto';
+import type { IKdsOrderStatusRepository } from './repositories/kds-order-status.repository';
 
 export interface KdsRequestContext {
   userId?: string;
@@ -30,7 +30,7 @@ export interface KdsRequestContext {
 
 export class KdsOrderStatusService {
   constructor(
-    private readonly repository: IOrderRepository,
+    private readonly repository: IKdsOrderStatusRepository,
     private readonly config: AppConfig,
     private readonly logger: Logger,
     private readonly orderEventBus: OrderEventBus,
@@ -122,10 +122,6 @@ export class KdsOrderStatusService {
       }
 
       const nextStatusCode = resolveStatusCode(nextRow.order_status_code);
-
-      console.log('current Status: ', currentStatusCode);
-
-      console.log('next status: ', nextStatusCode);
 
       assertKdsOrderStatusTransition(currentStatusCode, nextStatusCode);
 
@@ -221,8 +217,11 @@ export class KdsOrderStatusService {
         await this.repository.findOrderStatusById(cancelStatusId);
 
       await this.repository.transaction(async (trx) => {
-        await this.repository.softDeleteOrder(orderId, cancelStatusId, trx);
-        await this.repository.softDeleteOrderItemsByOrderId(orderId, trx);
+        await this.repository.update(
+          orderId,
+          { order_status_id: cancelStatusId },
+          trx,
+        );
       });
 
       const toStatusCode =

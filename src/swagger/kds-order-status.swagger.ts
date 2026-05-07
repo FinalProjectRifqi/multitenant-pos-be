@@ -150,7 +150,7 @@ export const kdsOrderStatusSwaggerDoc = {
         tags: ['KitchenDisplayOrderStatus'],
         summary: 'Batalkan order (KDS)',
         description:
-          'Membatalkan order hanya saat status masih setara Baru Masuk — sama seperti aturan pembatalan order utama. Soft-delete order dan itemnya. Membutuhkan `order_status:read` dan `order_status:delete`.',
+          'Membatalkan order hanya saat status masih setara Baru Masuk — sama seperti aturan pembatalan order utama. Pembatalan dilakukan melalui perubahan status ke dibatalkan. Membutuhkan `order_status:read` dan `order_status:delete`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         responses: {

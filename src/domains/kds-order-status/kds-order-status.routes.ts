@@ -7,9 +7,9 @@ import { asyncHandler } from '../../common/middlewares/async-handler';
 import { buildPermissionMiddleware } from '../../common/middlewares/require-permission';
 import { validateRequest } from '../../common/middlewares/validate-request';
 import { OrderItemParamsDto } from '../orders/dto/order-params.dto';
-import { OrderRepository } from '../orders/repositories/order.repository';
 import { KdsOrderStatusTransitionDto } from './dto/kds-order-status-transition.dto';
 import { KdsOrderStatusController } from './kds-order-status.controller';
+import { KdsOrderStatusRepository } from './repositories/kds-order-status.repository';
 import { KdsOrderStatusService } from './kds-order-status.service';
 
 interface KdsOrderStatusRouterDeps {
@@ -28,7 +28,7 @@ export const buildKdsOrderStatusRouter = ({
   const router = Router();
   const requirePermission = buildPermissionMiddleware(config, logger);
 
-  const repository = new OrderRepository(knex);
+  const repository = new KdsOrderStatusRepository(knex);
   const service = new KdsOrderStatusService(
     repository,
     config,

@@ -1257,7 +1257,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Batalkan order',
         description:
-          'Membatalkan order secara soft-delete dan mengubah statusnya menjadi dibatalkan. Hanya order dengan status "baru masuk" yang dapat dibatalkan. Order yang sudah diproses, siap, atau selesai tidak dapat dibatalkan. Semua item order juga akan di-soft-delete. Membutuhkan permission `order:read` dan `order:delete`.',
+          'Membatalkan order dengan mengubah statusnya menjadi dibatalkan. Hanya order dengan status "baru masuk" yang dapat dibatalkan. Order yang sudah diproses, siap, atau selesai tidak dapat dibatalkan. Membutuhkan permission `order:read` dan `order:delete`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         responses: {
