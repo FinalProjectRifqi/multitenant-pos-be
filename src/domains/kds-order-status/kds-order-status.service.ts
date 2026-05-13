@@ -100,7 +100,7 @@ export class KdsOrderStatusService {
       }
 
       type ResolvedStatusRow = NonNullable<
-        Awaited<ReturnType<IOrderRepository['findOrderStatusById']>>
+        Awaited<ReturnType<IKdsOrderStatusRepository['findOrderStatusById']>>
       >;
 
       let nextRow: ResolvedStatusRow;
