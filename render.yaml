@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: multitenant-pos-be
+    runtime: node
+    buildCommand: pnpm install --no-frozen-lockfile && pnpm run build
+    startCommand: node dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: development
