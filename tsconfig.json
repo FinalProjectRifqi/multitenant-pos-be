@@ -19,7 +19,8 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "types": ["@cloudflare/workers-types", "node", "jest"]
+    "types": ["node", "jest"],
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

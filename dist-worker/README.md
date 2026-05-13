@@ -1,0 +1,1 @@
+This folder contains the built output assets for the worker "multitenant-pos-be" generated at 2026-05-13T18:21:49.074Z.

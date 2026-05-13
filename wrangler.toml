@@ -2,6 +2,7 @@ name = "multitenant-pos-be"
 main = "src/worker.ts"
 compatibility_date = "2026-05-13"
 compatibility_flags = ["nodejs_compat"]
+tsconfig = "tsconfig.worker.json"
 
 # ─── Non-sensitive vars ─────────────────────────────────────────────────────────
 # Sensitive values (passwords, keys, secrets) must be set via:
