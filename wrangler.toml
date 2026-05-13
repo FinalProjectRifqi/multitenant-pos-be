@@ -1,0 +1,56 @@
+name = "multitenant-pos-be"
+main = "src/worker.ts"
+compatibility_date = "2026-05-13"
+compatibility_flags = ["nodejs_compat"]
+
+# ─── Non-sensitive vars ─────────────────────────────────────────────────────────
+# Sensitive values (passwords, keys, secrets) must be set via:
+#   wrangler secret put <KEY>
+[vars]
+NODE_ENV = "production"
+PORT = "3004"
+LOG_LEVEL = "info"
+LOG_FORMAT = "json"
+JWT_EXPIRES_IN = "1h"
+BCRYPT_SALT_ROUNDS = "12"
+
+# CORS — update with your actual frontend URL
+CORS_ORIGINS_ALLOW = "https://your-frontend.pages.dev"
+
+# DB pool — keep small because Workers has short-lived isolates
+PROD_DB_PORT = "5432"
+PROD_DB_SSL = "true"
+PROD_DB_SSL_REJECT_UNAUTHORIZED = "true"
+PROD_DB_SSL_CA = ""
+PROD_DB_SSL_KEY = ""
+PROD_DB_SSL_CERT = ""
+PROD_DB_STATEMENT_TIMEOUT = "30000"
+PROD_DB_QUERY_TIMEOUT = "60000"
+PROD_DB_CONNECTION_TIMEOUT = "5000"
+PROD_DB_POOL_MIN = "1"
+PROD_DB_POOL_MAX = "3"
+
+# Order status UUIDs
+PENDING_ORDER_STATUS_UUID = ""
+CANCEL_ORDER_STATUS_UUID  = ""
+READY_ORDER_STATUS_UUID   = ""
+
+# Midtrans — non-production base URL (override for production)
+# CLIENT_SECRET_KEY, SERVER_SECRET_KEY, MERCHANT_ID → set as secrets
+
+# Storage
+STORAGE_BUCKET_NAME = "uploads"
+STORAGE_MAX_SIZE_PER_FILE = "5MB"
+# STORAGE_URL, STORAGE_SECRET_KEYS → set as secrets
+
+# ─── Secrets (set via `wrangler secret put <KEY>`) ──────────────────────────────
+# JWT_SECRET
+# PROD_DB_HOST
+# PROD_DB_USER
+# PROD_DB_PASSWORD
+# PROD_DB_NAME
+# CLIENT_SECRET_KEY
+# SERVER_SECRET_KEY
+# MERCHANT_ID
+# STORAGE_URL
+# STORAGE_SECRET_KEYS

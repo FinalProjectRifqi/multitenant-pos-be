@@ -7,6 +7,9 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
+    "worker:dev": "wrangler dev",
+    "worker:deploy": "wrangler deploy",
+    "worker:secret": "wrangler secret put",
     "dev:local": "cross-env NODE_ENV=local pnpm run start:dev",
     "dev:remote": "cross-env NODE_ENV=development pnpm run start:dev",
     "lint": "eslint \"src/**/*.ts\"",
@@ -21,6 +24,7 @@
   },
   "dependencies": {
     "@supabase/storage-js": "^2.105.1",
+    "@whatwg-node/server": "^0.10.18",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
@@ -40,6 +44,7 @@
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@eslint/js": "^9.18.0",
     "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.17",
@@ -62,6 +67,7 @@
     "ts-node-dev": "^2.0.0",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.20.0",
+    "wrangler": "^4.90.1"
   }
 }
