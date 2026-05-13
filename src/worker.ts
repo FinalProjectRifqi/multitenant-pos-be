@@ -9,27 +9,32 @@
  * No .env file loading is needed here.
  */
 
-import 'reflect-metadata';
 import { createServerAdapter } from '@whatwg-node/server';
+import 'reflect-metadata';
 import { createApp } from './app';
 import { getAppConfig } from './config';
 import { createDatabase } from './database';
 import { createLogger } from './logger';
 
-let cachedApp: ReturnType<typeof createApp> | null = null;
+let cachedAdapter: ReturnType<typeof createServerAdapter> | null = null;
 
-function getApp() {
-  if (!cachedApp) {
+function getAdapter() {
+  if (!cachedAdapter) {
     const config = getAppConfig();
     const logger = createLogger(config.logger);
     const knex = createDatabase(config.database);
-    cachedApp = createApp({ config, knex, logger });
+    const app = createApp({ config, knex, logger });
+    // createServerAdapter accepts an Express app directly —
+    // it internally calls app.handle() which matches (req, res, next)
+    cachedAdapter = createServerAdapter(app);
   }
-  return cachedApp;
+  return cachedAdapter;
 }
 
-export default createServerAdapter((request: Request) => {
-  const app = getApp();
-  // @ts-expect-error — Express handler is compatible at runtime via nodejs_compat
-  return app(request);
-});
+export default {
+  fetch(request: Request, env: Record<string, string>): Promise<Response> {
+    // Inject wrangler env vars into process.env for nodejs_compat
+    Object.assign(process.env, env);
+    return getAdapter().fetch(request);
+  },
+} satisfies ExportedHandler;
