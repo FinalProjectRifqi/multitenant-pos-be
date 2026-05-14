@@ -13,6 +13,7 @@ export type PaymentStatus =
 export interface PaymentRow {
   payment_id: string;
   order_id: string;
+  unit_id?: string;
   reference_number: string;
   amount: number;
   payment_status: PaymentStatus;
@@ -71,13 +72,20 @@ export interface PaymentCashlessCreateApiResponse {
   message: string;
   data: {
     payment: PaymentResponse;
-    snap_token: string;
-    redirect_url: string;
+    qr_code_url: string;
+    qr_string: string;
+    acquirer: string;
     webhook_signature_key: string;
   };
 }
 
 export interface PaymentWebhookApiResponse {
+  success: true;
+  statusCode: 200;
+  message: string;
+}
+
+export interface PaymentCancelApiResponse {
   success: true;
   statusCode: 200;
   message: string;

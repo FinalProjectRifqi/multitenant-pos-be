@@ -49,3 +49,10 @@ export const paymentMidtransRequestFailedError = (): AppError =>
     message: 'Gagal membuat transaksi ke Midtrans',
     status: 502,
   });
+
+export const paymentCannotBeCancelledError = (): AppError =>
+  new AppError({
+    code: DomainErrorCodes.PaymentCannotBeCancelled,
+    message: 'Payment tidak dapat dibatalkan karena statusnya sudah berubah',
+    status: 409,
+  });

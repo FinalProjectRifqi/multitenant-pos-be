@@ -93,6 +93,26 @@ export const buildOrderRouter = ({
     asyncHandler((req, res) => paymentController.getPaymentById(req, res)),
   );
 
+  // DELETE /:unitId/:orderId/payments/:paymentId — cancel cashless payment
+  router.delete(
+    '/:unitId/:orderId/payments/:paymentId',
+    requirePermission('payment:process'),
+    validateRequest(PaymentItemParamsDto, 'params'),
+    asyncHandler((req, res) =>
+      paymentController.cancelCashlessPayment(req, res),
+    ),
+  );
+
+  // POST /:unitId/:orderId/payments/:paymentId/simulate-success — simulate settlement webhook
+  router.post(
+    '/:unitId/:orderId/payments/:paymentId/simulate-success',
+    requirePermission('payment:process'),
+    validateRequest(PaymentItemParamsDto, 'params'),
+    asyncHandler((req, res) =>
+      paymentController.simulateMidtransSettlement(req, res),
+    ),
+  );
+
   // GET /:unitId — list all orders for a unit
   router.get(
     '/:unitId',

@@ -202,10 +202,22 @@ const paymentCashlessResponseSchema = {
   type: 'object',
   properties: {
     payment: paymentResponseSchema,
-    snap_token: { type: 'string', example: 'dummy-snap-token' },
-    redirect_url: {
+    qr_code_url: {
       type: 'string',
-      example: 'https://app.sandbox.midtrans.com/snap/v2/vtweb/abc',
+      example:
+        'https://api.sandbox.midtrans.com/v2/qris/generate-qr-code?id=abc123',
+      description:
+        'URL gambar QR code QRIS yang dapat ditampilkan di frontend.',
+    },
+    qr_string: {
+      type: 'string',
+      example: '00020101021226590013ID.CO.GOPAY.WWW',
+      description: 'String data QR code QRIS (EMVCO format).',
+    },
+    acquirer: {
+      type: 'string',
+      example: 'gopay',
+      description: 'Acquirer QRIS yang digunakan.',
     },
     webhook_signature_key: {
       type: 'string',
@@ -1318,9 +1330,9 @@ export const ordersSwaggerDoc = {
     '/v1/orders/{unitId}/{orderId}/payments/cashless': {
       post: {
         tags: ['Orders'],
-        summary: 'Buat payment cashless (Midtrans Snap)',
+        summary: 'Buat payment cashless (QRIS Core API)',
         description:
-          'Membuat payment cashless untuk order yang berstatus "siap". Mengembalikan snap_token, redirect_url, dan webhook_signature_key dari Midtrans flow agar frontend dapat langsung menggunakan nilai signature untuk kebutuhan validasi/testing. Membutuhkan permission `payment:process`.',
+          'Membuat payment cashless QRIS untuk order yang berstatus "siap". Mengembalikan qr_code_url, qr_string, acquirer, dan webhook_signature_key dari Midtrans Core API. Jika sudah ada payment pending yang belum expired, endpoint ini mengembalikan kembali data payment tersebut beserta QR terbaru dari Midtrans. Membutuhkan permission `payment:process`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         requestBody: {
@@ -1367,7 +1379,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Buat payment cash',
         description:
-          'Membuat payment cash untuk order yang berstatus "siap". Status payment langsung "paid". Membutuhkan permission `payment:process`.',
+          'Membuat payment cash untuk order yang berstatus "siap". Status payment langsung "paid" dan status order akan diubah menjadi "selesai". Membutuhkan permission `payment:process`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         requestBody: {
@@ -1477,13 +1489,126 @@ export const ordersSwaggerDoc = {
           '500': internalServerErrorResponse,
         },
       },
+      delete: {
+        tags: ['Orders'],
+        summary: 'Batalkan payment cashless (QRIS)',
+        description:
+          'Membatalkan payment cashless yang berstatus pending. Transaksi dibatalkan di Midtrans (best-effort) dan status payment diubah menjadi "cancelled". Membutuhkan permission `payment:process`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam, paymentIdParam],
+        responses: {
+          '200': {
+            description: 'Payment cashless berhasil dibatalkan',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Payment cashless berhasil dibatalkan',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': paymentDetailNotFoundResponse,
+          '409': {
+            description:
+              'Payment tidak dapat dibatalkan (status bukan pending)',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    code: {
+                      type: 'string',
+                      example: 'PAYMENT_CANNOT_BE_CANCELLED',
+                    },
+                    message: {
+                      type: 'string',
+                      example:
+                        'Payment tidak dapat dibatalkan karena statusnya sudah berubah',
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
+    '/v1/orders/{unitId}/{orderId}/payments/{paymentId}/simulate-success': {
+      post: {
+        tags: ['Orders'],
+        summary: 'Simulasikan settlement Midtrans',
+        description:
+          'Memicu simulasi webhook Midtrans dengan transaction_status=settlement untuk payment pending tertentu. Endpoint ini akan memproses alur webhook backend (payment menjadi "paid" dan order menjadi "selesai" jika status order saat ini "siap"). Membutuhkan permission `payment:process`.',
+        security: bearerSecurity,
+        parameters: [unitIdParam, orderIdParam, paymentIdParam],
+        responses: {
+          '200': {
+            description: 'Simulasi settlement berhasil diproses',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: { type: 'string', example: 'Webhook diterima' },
+                  },
+                },
+              },
+            },
+          },
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': paymentDetailNotFoundResponse,
+          '409': {
+            description: 'Payment tidak dapat disimulasikan',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: {
+                      type: 'object',
+                      properties: {
+                        code: {
+                          type: 'string',
+                          example: 'PAYMENT_CANNOT_BE_CANCELLED',
+                        },
+                        message: {
+                          type: 'string',
+                          example:
+                            'Payment tidak dapat dibatalkan karena statusnya sudah berubah',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '500': internalServerErrorResponse,
+        },
+      },
     },
     '/v1/orders/payments/midtrans/webhook': {
       post: {
         tags: ['Orders'],
         summary: 'Webhook Midtrans',
         description:
-          'Endpoint webhook publik untuk menerima update status transaksi dari Midtrans. Signature diverifikasi menggunakan server key.',
+          'Endpoint webhook publik untuk menerima update status transaksi dari Midtrans. Signature diverifikasi menggunakan server key. Saat transaction_status=settlement, payment akan menjadi "paid" dan order akan diubah ke status "selesai" jika status order saat ini "siap".',
         requestBody: {
           required: true,
           content: {
@@ -1495,7 +1620,13 @@ export const ordersSwaggerDoc = {
                     type: 'string',
                     example: 'PAY-ORD-20250115-0001-20250115103045',
                     description:
-                      'Gunakan nilai `payment.reference_number` dari response create cashless payment.',
+                      'Opsional jika order_id dikirim. Gunakan nilai `payment.reference_number` dari response create cashless payment.',
+                  },
+                  order_id: {
+                    type: 'string',
+                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                    description:
+                      'Alternatif untuk reference_number. Midtrans Core API biasanya mengirim order_id.',
                   },
                   status_code: { type: 'string', example: '200' },
                   gross_amount: { type: 'string', example: '55000' },
@@ -1505,7 +1636,7 @@ export const ordersSwaggerDoc = {
                     type: 'string',
                     example: 'sha512-hash',
                     description:
-                      'Signature SHA-512 Midtrans dengan format: reference_number + status_code + gross_amount + server_key.',
+                      'Signature SHA-512 Midtrans dengan format: order_id/reference_number + status_code + gross_amount + server_key.',
                   },
                 },
               },

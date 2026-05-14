@@ -7,7 +7,7 @@ export interface CreatePaymentData {
   amount: number;
   payment_status: PaymentStatus;
   failure_reason: string | null;
-  paid_at: Date;
+  paid_at?: Date | null;
   expired_at: Date;
 }
 
@@ -32,6 +32,21 @@ export interface IPaymentRepository {
 }
 
 const PAYMENT_SELECT_COLUMNS = [
+  'p.payment_id',
+  'p.order_id',
+  'o.unit_id',
+  'p.reference_number',
+  'p.amount',
+  'p.payment_status',
+  'p.failure_reason',
+  'p.paid_at',
+  'p.expired_at',
+  'p.created_at',
+  'p.updated_at',
+  'p.deleted_at',
+];
+
+const PAYMENT_SELECT_COLUMNS_NO_ORDER_JOIN = [
   'p.payment_id',
   'p.order_id',
   'p.reference_number',
@@ -83,7 +98,7 @@ export class PaymentRepository implements IPaymentRepository {
 
   async findActiveByOrderId(orderId: string): Promise<PaymentRow | null> {
     const row = await this.db('payments as p')
-      .select(PAYMENT_SELECT_COLUMNS)
+      .select(PAYMENT_SELECT_COLUMNS_NO_ORDER_JOIN)
       .where('p.order_id', orderId)
       .whereIn('p.payment_status', ['pending', 'paid'])
       .whereNull('p.deleted_at')

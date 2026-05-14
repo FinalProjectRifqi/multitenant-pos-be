@@ -51,6 +51,32 @@ export class PaymentController {
     res.status(200).json(result);
   }
 
+  async cancelCashlessPayment(req: Request, res: Response): Promise<void> {
+    const { unitId, orderId, paymentId } =
+      req.params as unknown as PaymentItemParamsDto;
+    const userId = req.user!.sub;
+    const result = await this.service.cancelCashlessPayment(
+      unitId,
+      orderId,
+      paymentId,
+      userId,
+    );
+    res.status(200).json(result);
+  }
+
+  async simulateMidtransSettlement(req: Request, res: Response): Promise<void> {
+    const { unitId, orderId, paymentId } =
+      req.params as unknown as PaymentItemParamsDto;
+    const userId = req.user!.sub;
+    const result = await this.service.simulateMidtransSettlement(
+      unitId,
+      orderId,
+      paymentId,
+      userId,
+    );
+    res.status(200).json(result);
+  }
+
   async handleMidtransWebhook(req: Request, res: Response): Promise<void> {
     const result = await this.service.handleMidtransWebhook(req.body);
     res.status(200).json(result);
