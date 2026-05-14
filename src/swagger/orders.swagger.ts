@@ -84,7 +84,7 @@ const orderListItemSchema = {
       format: 'uuid',
       example: '550e8400-e29b-41d4-a716-446655440002',
     },
-    order_status_name: { type: 'string', example: 'menunggu' },
+    order_status_name: { type: 'string', example: 'baru masuk' },
     ordered_at: {
       type: 'string',
       format: 'date-time',
@@ -144,7 +144,7 @@ const orderDetailSchema = {
       format: 'uuid',
       example: '550e8400-e29b-41d4-a716-446655440002',
     },
-    order_status_name: { type: 'string', example: 'menunggu' },
+    order_status_name: { type: 'string', example: 'baru masuk' },
     items: {
       type: 'array',
       items: orderItemSchema,
@@ -713,7 +713,7 @@ export const ordersSwaggerDoc = {
     {
       name: 'Orders',
       description:
-        'Manajemen order — buat, lihat, perbarui, dan batalkan order per unit usaha. Order hanya bisa dibatalkan saat berstatus "menunggu".',
+        'Manajemen order — buat, lihat, perbarui, dan batalkan order per unit usaha. Order hanya bisa dibatalkan saat berstatus "baru masuk".',
     },
   ],
   paths: {
@@ -1057,7 +1057,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Perbarui order (partial)',
         description:
-          'Memperbarui data order secara parsial. Minimal satu field harus dikirim. Order tidak dapat diperbarui jika statusnya sudah "selesai". Jika items dikirim, strategi yang digunakan adalah replace: item yang tidak disertakan akan dihapus, item dengan order_item_id akan diupdate, item tanpa order_item_id akan ditambahkan. Jika items diubah, subtotal dan total_amount wajib disertakan. Membutuhkan permission `order:read` dan `order:update`.',
+          'Memperbarui data order secara parsial. Minimal satu field harus dikirim. Order tidak dapat diperbarui jika statusnya sudah "selesai". Perubahan status order hanya boleh mengikuti alur: Baru Masuk -> Sedang Diproses -> Siap Disajikan -> Selesai. Pembatalan order wajib lewat endpoint DELETE. Jika items dikirim, strategi yang digunakan adalah replace: item yang tidak disertakan akan dihapus, item dengan order_item_id akan diupdate, item tanpa order_item_id akan ditambahkan. Jika items diubah, subtotal dan total_amount wajib disertakan. Membutuhkan permission `order:read` dan `order:update`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         requestBody: {
@@ -1072,6 +1072,13 @@ export const ordersSwaggerDoc = {
                     format: 'uuid',
                     example: '550e8400-e29b-41d4-a716-446655440001',
                     description: 'UUID tipe order baru (opsional)',
+                  },
+                  order_status_id: {
+                    type: 'string',
+                    format: 'uuid',
+                    example: '550e8400-e29b-41d4-a716-446655440010',
+                    description:
+                      'UUID status order baru (opsional). Ikuti alur status yang diizinkan.',
                   },
                   customer_name: {
                     type: 'string',
@@ -1250,7 +1257,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Batalkan order',
         description:
-          'Membatalkan order secara soft-delete dan mengubah statusnya menjadi cancelled. Hanya order dengan status "menunggu" yang dapat dibatalkan. Order yang sudah diproses, siap, atau selesai tidak dapat dibatalkan. Semua item order juga akan di-soft-delete. Membutuhkan permission `order:read` dan `order:delete`.',
+          'Membatalkan order dengan mengubah statusnya menjadi dibatalkan. Hanya order dengan status "baru masuk" yang dapat dibatalkan. Order yang sudah diproses, siap, atau selesai tidak dapat dibatalkan. Membutuhkan permission `order:read` dan `order:delete`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         responses: {
@@ -1277,7 +1284,7 @@ export const ordersSwaggerDoc = {
           '404': orderNotFoundResponse,
           '422': {
             description:
-              'Order tidak dapat dibatalkan karena statusnya bukan "menunggu"',
+              'Order tidak dapat dibatalkan karena statusnya bukan "baru masuk"',
             content: {
               'application/json': {
                 schema: {
@@ -1295,7 +1302,7 @@ export const ordersSwaggerDoc = {
                         message: {
                           type: 'string',
                           example:
-                            'Order hanya dapat dibatalkan saat berstatus menunggu',
+                            'Order hanya dapat dibatalkan saat berstatus baru masuk',
                         },
                       },
                     },

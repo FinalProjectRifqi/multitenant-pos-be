@@ -5,6 +5,8 @@ export const DomainErrorCodes = {
   OrderCannotBeCancelled: 'ORDER_CANNOT_BE_CANCELLED',
   OrderItemNotFound: 'ORDER_ITEM_NOT_FOUND',
   OrderTypeNotFound: 'ORDER_TYPE_NOT_FOUND',
+  OrderStatusNotFound: 'ORDER_STATUS_NOT_FOUND',
+  OrderKdsTransitionNotAllowed: 'ORDER_KDS_TRANSITION_NOT_ALLOWED',
   OrderMenuNotAvailable: 'ORDER_MENU_NOT_AVAILABLE',
   OrderMenuNotInUnit: 'ORDER_MENU_NOT_IN_UNIT',
   OrderPriceMismatch: 'ORDER_PRICE_MISMATCH',

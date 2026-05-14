@@ -15,6 +15,13 @@ export const orderTypeNotFoundError = (): AppError =>
     status: 404,
   });
 
+export const orderStatusNotFoundError = (): AppError =>
+  new AppError({
+    code: DomainErrorCodes.OrderStatusNotFound,
+    message: 'Status order tidak ditemukan',
+    status: 404,
+  });
+
 export const orderAlreadyCompletedError = (): AppError =>
   new AppError({
     code: DomainErrorCodes.OrderAlreadyCompleted,
@@ -32,7 +39,7 @@ export const orderAlreadyCancelledError = (): AppError =>
 export const orderCannotBeCancelledError = (): AppError =>
   new AppError({
     code: DomainErrorCodes.OrderCannotBeCancelled,
-    message: 'Order hanya dapat dibatalkan saat berstatus menunggu',
+    message: 'Order hanya dapat dibatalkan saat berstatus baru masuk',
     status: 422,
   });
 
@@ -62,4 +69,12 @@ export const orderPriceMismatchError = (menuName: string): AppError =>
     code: DomainErrorCodes.OrderPriceMismatch,
     message: `Harga menu "${menuName}" tidak sesuai dengan harga yang berlaku`,
     status: 422,
+  });
+
+export const orderKdsTransitionNotAllowedError = (): AppError =>
+  new AppError({
+    code: DomainErrorCodes.OrderKdsTransitionNotAllowed,
+    message:
+      'Menyelesaikan order tidak dapat dilakukan dari Kitchen Display. Gunakan modul order.',
+    status: 400,
   });

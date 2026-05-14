@@ -11,12 +11,14 @@ import type {
 } from './dto/update-order.dto';
 import {
   orderAlreadyCompletedError,
+  orderAlreadyCancelledError,
   orderCannotBeCancelledError,
   orderItemNotFoundError,
   orderMenuNotAvailableError,
   orderMenuNotInUnitError,
   orderNotFoundError,
   orderPriceMismatchError,
+  orderStatusNotFoundError,
   orderTypeNotFoundError,
 } from './errors/order.errors';
 import type {
@@ -36,6 +38,14 @@ import type {
   OrderSortByColumn,
   UpdateOrderData,
 } from './repositories/order.repository';
+import {
+  assertGeneralOrderStatusTransition,
+  resolveStatusCode,
+} from './order-status-transition';
+import {
+  mapOrderDetailResponse,
+  mapOrderItemResponse,
+} from './order-response.mapper';
 
 // Differences <= 1 rupiah are accepted to handle floating-point rounding
 const PRICE_TOLERANCE = 1;
@@ -322,8 +332,17 @@ export class OrderService {
         throw orderNotFoundError();
       }
 
-      // 3. Cannot update a completed order
-      if (existingOrder.order_status_name === 'selesai') {
+      // 3. Resolve current status for transition validation
+      const currentStatusValue =
+        existingOrder.order_status_code ?? existingOrder.order_status_name;
+
+      if (!currentStatusValue) {
+        throw orderStatusNotFoundError();
+      }
+
+      const currentStatusCode = resolveStatusCode(currentStatusValue);
+
+      if (currentStatusCode === 'SELESAI') {
         this.logger.warn(
           { unitId, orderId, status: existingOrder.order_status_name },
           'Order update failed - order already completed',
@@ -331,9 +350,18 @@ export class OrderService {
         throw orderAlreadyCompletedError();
       }
 
+      if (currentStatusCode === 'DIBATALKAN') {
+        this.logger.warn(
+          { unitId, orderId, status: existingOrder.order_status_name },
+          'Order update failed - order already cancelled',
+        );
+        throw orderAlreadyCancelledError();
+      }
+
       // 4. Require at least one field to change
       const hasHeaderChange =
         dto.order_type_id !== undefined ||
+        dto.order_status_id !== undefined ||
         dto.customer_name !== undefined ||
         dto.table_number !== undefined ||
         dto.notes !== undefined;
@@ -401,6 +429,32 @@ export class OrderService {
         resolvedTableNumber = null;
       }
 
+      let nextStatusId: string | undefined;
+      let nextStatusCode: string | undefined;
+      let completedAt: Date | undefined;
+
+      if (dto.order_status_id !== undefined) {
+        const nextStatus = await this.repository.findOrderStatusById(
+          dto.order_status_id,
+        );
+        if (!nextStatus) {
+          this.logger.warn(
+            { unitId, orderId, statusId: dto.order_status_id },
+            'Order update failed - status not found',
+          );
+          throw orderStatusNotFoundError();
+        }
+
+        nextStatusId = nextStatus.order_status_id;
+        nextStatusCode = resolveStatusCode(nextStatus.order_status_code);
+
+        assertGeneralOrderStatusTransition(currentStatusCode, nextStatusCode);
+
+        if (nextStatusCode === 'SELESAI') {
+          completedAt = new Date();
+        }
+      }
+
       // 7. Process items if provided
       let mergedItems: UpdateOrderItemInputDto[] = [];
       let existingItemRows: OrderItemRow[] = [];
@@ -463,6 +517,9 @@ export class OrderService {
           ...(dto.order_type_id !== undefined
             ? { order_type_id: resolvedOrderTypeId }
             : {}),
+          ...(nextStatusId !== undefined
+            ? { order_status_id: nextStatusId }
+            : {}),
           ...(dto.customer_name !== undefined
             ? { customer_name: dto.customer_name }
             : {}),
@@ -475,6 +532,7 @@ export class OrderService {
           ...(dto.total_amount !== undefined
             ? { total_amount: dto.total_amount }
             : {}),
+          ...(completedAt !== undefined ? { completed_at: completedAt } : {}),
         };
 
         await this.repository.update(orderId, updateData, trx);
@@ -570,23 +628,45 @@ export class OrderService {
         throw orderNotFoundError();
       }
 
-      // 3. Only orders in 'menunggu' status can be cancelled
-      if (existingOrder.order_status_name !== 'menunggu') {
+      // 3. Only orders in 'baru masuk' status can be cancelled
+      const currentStatusValue =
+        existingOrder.order_status_code ?? existingOrder.order_status_name;
+
+      if (!currentStatusValue) {
+        throw orderStatusNotFoundError();
+      }
+
+      const currentStatusCode = resolveStatusCode(currentStatusValue);
+
+      if (currentStatusCode === 'DIBATALKAN') {
         this.logger.warn(
           { unitId, orderId, status: existingOrder.order_status_name },
+          'Order cancel failed - order already cancelled',
+        );
+        throw orderAlreadyCancelledError();
+      }
+
+      if (currentStatusCode !== 'BARU_MASUK') {
+        this.logger.warn(
+          {
+            unitId,
+            orderId,
+            statusId: existingOrder.order_status_id,
+            statusName: existingOrder.order_status_name,
+            statusCode: currentStatusCode,
+          },
           'Order cancel failed - order cannot be cancelled in current status',
         );
         throw orderCannotBeCancelledError();
       }
 
-      // 4. Soft-delete the order and all its items atomically
+      // 4. Mark order as cancelled by status transition only
       await this.repository.transaction(async (trx) => {
-        await this.repository.softDeleteOrder(
+        await this.repository.update(
           orderId,
-          this.config.order.cancelStatusUuid,
+          { order_status_id: this.config.order.cancelStatusUuid },
           trx,
         );
-        await this.repository.softDeleteOrderItemsByOrderId(orderId, trx);
       });
 
       this.logger.info({ unitId, orderId }, 'Order cancelled successfully');
@@ -795,39 +875,13 @@ export class OrderService {
   }
 
   private mapToItemResponse(row: OrderItemRow): OrderItemResponse {
-    return {
-      order_item_id: row.order_item_id,
-      menu_item_id: row.menu_item_id,
-      menu_item_name: row.menu_item_name,
-      quantity: Number(row.quantity),
-      item_price: Number(row.item_price),
-      subtotal: Number(row.item_price) * Number(row.quantity),
-      notes: row.notes,
-    };
+    return mapOrderItemResponse(row);
   }
 
   private mapToDetailResponse(
     order: OrderRow,
     items: OrderItemRow[],
   ): OrderDetailResponse {
-    return {
-      order_id: order.order_id,
-      unit_id: order.unit_id,
-      user_id: order.user_id,
-      order_number: order.order_number,
-      customer_name: order.customer_name,
-      table_number: order.table_number,
-      notes: order.notes,
-      subtotal: Number(order.subtotal),
-      tax_amount: Number(order.tax_amount),
-      total_amount: Number(order.total_amount),
-      ordered_at: order.ordered_at,
-      completed_at: order.completed_at,
-      order_type_id: order.order_type_id,
-      order_type_name: order.order_type_name,
-      order_status_id: order.order_status_id,
-      order_status_name: order.order_status_name,
-      items: items.map((item) => this.mapToItemResponse(item)),
-    };
+    return mapOrderDetailResponse(order, items);
   }
 }

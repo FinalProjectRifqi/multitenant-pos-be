@@ -22,6 +22,7 @@ export interface OrderRow {
   order_type_name: string;
   order_status_id: string;
   order_status_name: string;
+  order_status_code: string;
 }
 
 export interface OrderItemRow {

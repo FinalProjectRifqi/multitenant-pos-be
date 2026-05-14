@@ -4,6 +4,7 @@ import type {
   OrderItemRow,
   OrderRow,
 } from '../models/order.model';
+import { resolveStatusCode } from '../order-status-transition';
 
 // ===========================
 // Parameter & Data Types
@@ -44,12 +45,14 @@ export interface CreateOrderItemData {
 
 export interface UpdateOrderData {
   order_type_id?: string;
+  order_status_id?: string;
   customer_name?: string;
   table_number?: string | null;
   notes?: string | null;
   subtotal?: number;
   tax_amount?: number;
   total_amount?: number;
+  completed_at?: Date | null;
 }
 
 export interface UpsertOrderItemData {
@@ -71,6 +74,16 @@ export interface IOrderRepository {
   findOrderTypeById(
     orderTypeId: string,
   ): Promise<{ order_type_id: string; order_type_name: string } | null>;
+  findOrderStatusById(statusId: string): Promise<{
+    order_status_id: string;
+    order_status_name: string;
+    order_status_code: string;
+  } | null>;
+  findOrderStatusByCode(code: string): Promise<{
+    order_status_id: string;
+    order_status_name: string;
+    order_status_code: string;
+  } | null>;
   findMenuItemsByIds(
     menuItemIds: string[],
     unitId: string,
@@ -160,6 +173,7 @@ const ORDER_LIST_SELECT_COLUMNS = [
   'ot.order_type_name',
   'os.order_status_id',
   'os.order_status_name',
+  'os.order_status_code',
 ];
 
 const ORDER_ITEM_SELECT_COLUMNS = [
@@ -203,6 +217,44 @@ export class OrderRepository implements IOrderRepository {
       .first<{ order_type_id: string; order_type_name: string } | undefined>();
 
     return row ?? null;
+  }
+
+  async findOrderStatusById(statusId: string): Promise<{
+    order_status_id: string;
+    order_status_name: string;
+    order_status_code: string;
+  } | null> {
+    const row = await this.db('order_status')
+      .select('order_status_id', 'order_status_name', 'order_status_code')
+      .where('order_status_id', statusId)
+      .whereNull('deleted_at')
+      .first<
+        | {
+            order_status_id: string;
+            order_status_name: string;
+            order_status_code: string;
+          }
+        | undefined
+      >();
+
+    return row ?? null;
+  }
+
+  async findOrderStatusByCode(code: string): Promise<{
+    order_status_id: string;
+    order_status_name: string;
+    order_status_code: string;
+  } | null> {
+    const rows = await this.db('order_status')
+      .select('order_status_id', 'order_status_name', 'order_status_code')
+      .whereNull('deleted_at');
+
+    const target = resolveStatusCode(code);
+    const match =
+      rows.find((r) => resolveStatusCode(r.order_status_code) === target) ??
+      rows.find((r) => resolveStatusCode(r.order_status_name) === target);
+
+    return match ?? null;
   }
 
   async findMenuItemsByIds(
@@ -377,6 +429,8 @@ export class OrderRepository implements IOrderRepository {
 
     if (data.order_type_id !== undefined)
       payload.order_type_id = data.order_type_id;
+    if (data.order_status_id !== undefined)
+      payload.order_status_id = data.order_status_id;
     if (data.customer_name !== undefined)
       payload.customer_name = data.customer_name;
     if ('table_number' in data) payload.table_number = data.table_number;
@@ -385,6 +439,8 @@ export class OrderRepository implements IOrderRepository {
     if (data.tax_amount !== undefined) payload.tax_amount = data.tax_amount;
     if (data.total_amount !== undefined)
       payload.total_amount = data.total_amount;
+    if (data.completed_at !== undefined)
+      payload.completed_at = data.completed_at;
 
     await trx('orders')
       .where('order_id', orderId)

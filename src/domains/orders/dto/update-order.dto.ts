@@ -46,6 +46,10 @@ export class UpdateOrderDto {
   order_type_id?: string;
 
   @IsOptional()
+  @IsUUID('4', { message: 'order_status_id harus berupa UUID yang valid' })
+  order_status_id?: string;
+
+  @IsOptional()
   @IsString()
   @IsNotEmpty({ message: 'Nama pelanggan tidak boleh kosong jika diisi' })
   @MaxLength(255, { message: 'Nama pelanggan maksimal 255 karakter' })

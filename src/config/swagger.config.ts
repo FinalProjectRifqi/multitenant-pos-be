@@ -6,6 +6,7 @@ import type { AppConfig } from './index';
 import { healthSwaggerDoc } from '../swagger/health.swagger';
 import { ordersSwaggerDoc } from '../swagger/orders.swagger';
 import { orderTypeSwaggerDoc } from '../swagger/order-type';
+import { kdsOrderStatusSwaggerDoc } from '../swagger/kds-order-status.swagger';
 import { authSwaggerDoc } from '../swagger/auth.swagger';
 import { businessUnitsSwaggerDoc } from '../swagger/business-units.swagger';
 import { roleSwaggerDoc } from '../swagger/role.swagger';
@@ -79,6 +80,7 @@ const buildOpenApiDocument = () => {
     menusSwaggerDoc,
     menuCategorySwaggerDoc,
     inventarisSwaggerDoc,
+    kdsOrderStatusSwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 
