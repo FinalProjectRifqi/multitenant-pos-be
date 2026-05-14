@@ -35,6 +35,7 @@ import type { IPaymentRepository } from './repositories/payment.repository';
 const PRICE_TOLERANCE = 1;
 const CASHLESS_EXPIRY_MINUTES = 15;
 const MIDTRANS_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_QRIS_ACQUIRER = 'gopay';
 
 interface MidtransCancelResponse {
   status_code?: string;
@@ -202,9 +203,40 @@ export class PaymentService {
       // Phase 3: post-transaction external HTTP calls
       if (prepareResult.kind === 'resume') {
         const { payment: activePayment } = prepareResult;
-        const qrisStatus = await this.getQrisTransactionStatus(
-          activePayment.reference_number,
-        );
+        let qrCodeUrl = activePayment.qr_code_url;
+        let qrString = activePayment.qr_string;
+        let acquirer = DEFAULT_QRIS_ACQUIRER;
+
+        if (!qrCodeUrl || !qrString) {
+          // Fallback only when local QR payload is unavailable.
+          const qrisStatus = await this.getQrisTransactionStatus(
+            activePayment.reference_number,
+          );
+          qrCodeUrl = qrisStatus.qr_code_url;
+          qrString = qrisStatus.qr_string;
+          acquirer = qrisStatus.acquirer;
+
+          try {
+            await this.paymentRepository.updateQrisPayload(
+              activePayment.payment_id,
+              {
+                qr_code_url: qrCodeUrl,
+                qr_string: qrString,
+              },
+            );
+          } catch (updateError) {
+            this.logger.warn(
+              {
+                err: updateError,
+                unitId,
+                orderId,
+                paymentId: activePayment.payment_id,
+              },
+              'Failed to persist resumed QR payload; continuing with response payload',
+            );
+          }
+        }
+
         const grossAmount = this.formatGrossAmount(activePayment.amount);
         const webhookSignatureKey = this.buildMidtransSignature(
           activePayment.reference_number,
@@ -217,9 +249,9 @@ export class PaymentService {
           message: 'Payment cashless berhasil dibuat',
           data: {
             payment: this.mapToResponse(activePayment),
-            qr_code_url: qrisStatus.qr_code_url,
-            qr_string: qrisStatus.qr_string,
-            acquirer: qrisStatus.acquirer,
+            qr_code_url: qrCodeUrl,
+            qr_string: qrString,
+            acquirer,
             webhook_signature_key: webhookSignatureKey,
           },
         };
@@ -259,6 +291,18 @@ export class PaymentService {
         }
 
         throw error;
+      }
+
+      try {
+        await this.paymentRepository.updateQrisPayload(payment_id, {
+          qr_code_url: qrisResult.qr_code_url,
+          qr_string: qrisResult.qr_string,
+        });
+      } catch (updateError) {
+        this.logger.warn(
+          { err: updateError, unitId, orderId, paymentId: payment_id },
+          'Failed to persist QR payload after Midtrans charge; continuing with response payload',
+        );
       }
 
       const payment = await this.paymentRepository.findById(

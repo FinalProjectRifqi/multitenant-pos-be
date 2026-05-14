@@ -18,6 +18,11 @@ export interface UpdatePaymentData {
   expired_at?: Date;
 }
 
+export interface UpdatePaymentQrisData {
+  qr_code_url: string;
+  qr_string: string;
+}
+
 export interface IPaymentRepository {
   findByOrderId(unitId: string, orderId: string): Promise<PaymentRow[]>;
   findById(
@@ -39,6 +44,11 @@ export interface IPaymentRepository {
     data: UpdatePaymentData,
     trx?: Knex.Transaction,
   ): Promise<void>;
+  updateQrisPayload(
+    paymentId: string,
+    data: UpdatePaymentQrisData,
+    trx?: Knex.Transaction,
+  ): Promise<void>;
 }
 
 const PAYMENT_SELECT_COLUMNS = [
@@ -51,6 +61,8 @@ const PAYMENT_SELECT_COLUMNS = [
   'p.failure_reason',
   'p.paid_at',
   'p.expired_at',
+  'p.qr_code_url',
+  'p.qr_string',
   'p.created_at',
   'p.updated_at',
   'p.deleted_at',
@@ -65,6 +77,8 @@ const PAYMENT_SELECT_COLUMNS_WITHOUT_ORDER_JOIN = [
   'p.failure_reason',
   'p.paid_at',
   'p.expired_at',
+  'p.qr_code_url',
+  'p.qr_string',
   'p.created_at',
   'p.updated_at',
   'p.deleted_at',
@@ -183,5 +197,22 @@ export class PaymentRepository implements IPaymentRepository {
       .where('payment_id', paymentId)
       .whereNull('deleted_at')
       .update(payload);
+  }
+
+  async updateQrisPayload(
+    paymentId: string,
+    data: UpdatePaymentQrisData,
+    trx?: Knex.Transaction,
+  ): Promise<void> {
+    const executor = this.getExecutor(trx);
+
+    await executor('payments')
+      .where('payment_id', paymentId)
+      .whereNull('deleted_at')
+      .update({
+        qr_code_url: data.qr_code_url,
+        qr_string: data.qr_string,
+        updated_at: executor.fn.now(),
+      });
   }
 }
