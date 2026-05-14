@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import { createHash } from 'node:crypto';
 import { ErrorCodes } from '../../../common/errors/error-codes';
 import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
 import type { AppConfig } from '../../../config';
@@ -20,6 +21,7 @@ const createMockOrderRepository = (): jest.Mocked<IOrderRepository> =>
     findMenuItemsByIds: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
+    findByIdForUpdate: jest.fn(),
     findOrderItemsByOrderId: jest.fn(),
     countOrdersToday: jest.fn(),
     create: jest.fn(),
@@ -55,10 +57,12 @@ const createMockConfig = (): AppConfig =>
   ({
     order: {
       readyStatusUuid: 'ready-status-uuid',
+      completeStatusUuid: 'complete-status-uuid',
     },
     midtrans: {
       serverKey: 'server-key',
       snapBaseUrl: 'https://app.sandbox.midtrans.com/snap/v1',
+      coreApiBaseUrl: 'https://api.sandbox.midtrans.com',
     },
   }) as unknown as AppConfig;
 
@@ -82,6 +86,7 @@ const createOrderRow = (overrides?: Partial<OrderRow>): OrderRow => ({
   order_type_name: 'Dine-in',
   order_status_id: 'ready-status-uuid',
   order_status_name: 'siap',
+  order_status_code: 'ready',
   ...overrides,
 });
 
@@ -119,6 +124,10 @@ describe('PaymentService', () => {
       mockConfig,
       mockLogger,
     );
+
+    mockOrderRepository.transaction.mockImplementation(async (callback) =>
+      callback({} as never),
+    );
   });
 
   afterEach(() => {
@@ -154,6 +163,14 @@ describe('PaymentService', () => {
       expect(result.data.payment_status).toBe('paid');
       expect(mockPaymentRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ payment_status: 'paid' }),
+        expect.anything(),
+      );
+      expect(mockOrderRepository.update).toHaveBeenCalledWith(
+        ORDER_ID,
+        expect.objectContaining({
+          order_status_id: 'complete-status-uuid',
+        }),
+        expect.anything(),
       );
     });
   });
@@ -163,8 +180,22 @@ describe('PaymentService', () => {
       jest.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
-          token: 'snap-token',
-          redirect_url: 'https://midtrans.example.com',
+          status_code: '201',
+          status_message: 'Success',
+          transaction_id: 'qris-transaction-id',
+          order_id: 'PAY-TEST-001',
+          gross_amount: '55000.00',
+          payment_type: 'qris',
+          transaction_status: 'pending',
+          qr_string: 'qr-string-data',
+          acquirer: 'gopay',
+          actions: [
+            {
+              name: 'generate-qr-code',
+              method: 'GET',
+              url: 'https://api.midtrans.com/v2/qris/img.png',
+            },
+          ],
         }),
       } as Response);
 
@@ -187,7 +218,7 @@ describe('PaymentService', () => {
       });
     });
 
-    it('throws when active payment exists', async () => {
+    it('throws when active paid payment exists', async () => {
       const order = createOrderRow();
 
       mockOrderRepository.findUnitById.mockResolvedValue({
@@ -195,8 +226,9 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
       mockPaymentRepository.findActiveByOrderId.mockResolvedValue(
-        createPaymentRow(),
+        createPaymentRow({ payment_status: 'paid' }),
       );
 
       await expect(
@@ -209,7 +241,41 @@ describe('PaymentService', () => {
       });
     });
 
-    it('returns snap token when cashless payment created', async () => {
+    it('resumes existing pending payment when still valid', async () => {
+      const order = createOrderRow();
+      const activePayment = createPaymentRow({
+        expired_at: new Date(Date.now() + 5 * 60 * 1000),
+      });
+      fetchSpy();
+
+      mockOrderRepository.findUnitById.mockResolvedValue({
+        unit_id: UNIT_ID,
+        unit_name: 'Unit A',
+      });
+      mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
+      mockPaymentRepository.findActiveByOrderId.mockResolvedValue(
+        activePayment,
+      );
+
+      const result = await service.createCashlessPayment(
+        UNIT_ID,
+        ORDER_ID,
+        USER_ID,
+        {
+          amount: 55000,
+        },
+      );
+
+      expect(result.statusCode).toBe(201);
+      expect(result.data.payment.payment_id).toBe(PAYMENT_ID);
+      expect(result.data.qr_code_url).toBe(
+        'https://api.midtrans.com/v2/qris/img.png',
+      );
+      expect(mockPaymentRepository.create).not.toHaveBeenCalled();
+    });
+
+    it('returns qr_code_url when cashless payment created', async () => {
       const order = createOrderRow();
       const payment = createPaymentRow();
       fetchSpy();
@@ -219,6 +285,7 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
       mockPaymentRepository.findActiveByOrderId.mockResolvedValue(null);
       mockPaymentRepository.create.mockResolvedValue({
         payment_id: PAYMENT_ID,
@@ -233,7 +300,11 @@ describe('PaymentService', () => {
       );
 
       expect(result.statusCode).toBe(201);
-      expect(result.data.snap_token).toBe('snap-token');
+      expect(result.data.qr_code_url).toBe(
+        'https://api.midtrans.com/v2/qris/img.png',
+      );
+      expect(result.data.qr_string).toBe('qr-string-data');
+      expect(result.data.acquirer).toBe('gopay');
     });
   });
 
@@ -255,14 +326,14 @@ describe('PaymentService', () => {
 
     it('updates payment status when settlement', async () => {
       const orderId = 'PAY-ORD-20250115-0001-20250115103045';
-      const signature = require('node:crypto')
-        .createHash('sha512')
+      const signature = createHash('sha512')
         .update(`${orderId}20055000server-key`)
         .digest('hex');
 
       mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
-        createPaymentRow({ payment_status: 'pending' }),
+        createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
       );
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
 
       const result = await service.handleMidtransWebhook({
         reference_number: orderId,
@@ -277,12 +348,69 @@ describe('PaymentService', () => {
         PAYMENT_ID,
         expect.objectContaining({ payment_status: 'paid' }),
       );
+      expect(mockOrderRepository.update).toHaveBeenCalledWith(
+        ORDER_ID,
+        expect.objectContaining({
+          order_status_id: 'complete-status-uuid',
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('accepts Midtrans payload using order_id field', async () => {
+      const midtransOrderId = 'PAY-ORD-20250115-0001-20250115103045';
+      const signature = createHash('sha512')
+        .update(`${midtransOrderId}20055000server-key`)
+        .digest('hex');
+
+      mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
+        createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
+      );
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
+
+      const result = await service.handleMidtransWebhook({
+        order_id: midtransOrderId,
+        status_code: '200',
+        gross_amount: '55000',
+        transaction_status: 'settlement',
+        signature_key: signature,
+      });
+
+      expect(result.statusCode).toBe(200);
+      expect(mockPaymentRepository.findByReferenceNumber).toHaveBeenCalledWith(
+        midtransOrderId,
+      );
+    });
+
+    it('does not update order to complete when current status is not ready', async () => {
+      const orderId = 'PAY-ORD-20250115-0001-20250115103045';
+      const signature = createHash('sha512')
+        .update(`${orderId}20055000server-key`)
+        .digest('hex');
+
+      mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
+        createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
+      );
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(
+        createOrderRow({ order_status_id: 'processing-status' }),
+      );
+
+      const result = await service.handleMidtransWebhook({
+        reference_number: orderId,
+        status_code: '200',
+        gross_amount: '55000',
+        transaction_status: 'settlement',
+        signature_key: signature,
+      });
+
+      expect(result.statusCode).toBe(200);
+      expect(mockPaymentRepository.updateStatus).toHaveBeenCalled();
+      expect(mockOrderRepository.update).not.toHaveBeenCalled();
     });
 
     it('throws 500 on unexpected error', async () => {
       const orderId = 'PAY-ORD-20250115-0001-20250115103045';
-      const signature = require('node:crypto')
-        .createHash('sha512')
+      const signature = createHash('sha512')
         .update(`${orderId}20055000server-key`)
         .digest('hex');
 
@@ -302,6 +430,37 @@ describe('PaymentService', () => {
         code: ErrorCodes.Internal,
         status: 500,
       });
+    });
+  });
+
+  describe('simulateMidtransSettlement', () => {
+    it('simulates settlement and updates payment status', async () => {
+      const payment = createPaymentRow({ payment_status: 'pending' });
+
+      mockOrderRepository.findUnitById.mockResolvedValue({
+        unit_id: UNIT_ID,
+        unit_name: 'Unit A',
+      });
+      mockOrderRepository.findById.mockResolvedValue(createOrderRow());
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
+      mockPaymentRepository.findById.mockResolvedValue(payment);
+      mockPaymentRepository.findByReferenceNumber.mockResolvedValue({
+        ...payment,
+        unit_id: UNIT_ID,
+      });
+
+      const result = await service.simulateMidtransSettlement(
+        UNIT_ID,
+        ORDER_ID,
+        PAYMENT_ID,
+        USER_ID,
+      );
+
+      expect(result.statusCode).toBe(200);
+      expect(mockPaymentRepository.updateStatus).toHaveBeenCalledWith(
+        PAYMENT_ID,
+        expect.objectContaining({ payment_status: 'paid' }),
+      );
     });
   });
 });

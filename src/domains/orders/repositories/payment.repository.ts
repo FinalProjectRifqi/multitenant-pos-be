@@ -7,7 +7,7 @@ export interface CreatePaymentData {
   amount: number;
   payment_status: PaymentStatus;
   failure_reason: string | null;
-  paid_at: Date;
+  paid_at?: Date | null;
   expired_at: Date;
 }
 
@@ -25,13 +25,38 @@ export interface IPaymentRepository {
     orderId: string,
     paymentId: string,
   ): Promise<PaymentRow | null>;
-  findActiveByOrderId(orderId: string): Promise<PaymentRow | null>;
+  findActiveByOrderId(
+    orderId: string,
+    trx?: Knex.Transaction,
+  ): Promise<PaymentRow | null>;
   findByReferenceNumber(referenceNumber: string): Promise<PaymentRow | null>;
-  create(data: CreatePaymentData): Promise<{ payment_id: string }>;
-  updateStatus(paymentId: string, data: UpdatePaymentData): Promise<void>;
+  create(
+    data: CreatePaymentData,
+    trx?: Knex.Transaction,
+  ): Promise<{ payment_id: string }>;
+  updateStatus(
+    paymentId: string,
+    data: UpdatePaymentData,
+    trx?: Knex.Transaction,
+  ): Promise<void>;
 }
 
 const PAYMENT_SELECT_COLUMNS = [
+  'p.payment_id',
+  'p.order_id',
+  'o.unit_id',
+  'p.reference_number',
+  'p.amount',
+  'p.payment_status',
+  'p.failure_reason',
+  'p.paid_at',
+  'p.expired_at',
+  'p.created_at',
+  'p.updated_at',
+  'p.deleted_at',
+];
+
+const PAYMENT_SELECT_COLUMNS_WITHOUT_ORDER_JOIN = [
   'p.payment_id',
   'p.order_id',
   'p.reference_number',
@@ -47,6 +72,10 @@ const PAYMENT_SELECT_COLUMNS = [
 
 export class PaymentRepository implements IPaymentRepository {
   constructor(private readonly db: Knex) {}
+
+  private getExecutor(trx?: Knex.Transaction): Knex | Knex.Transaction {
+    return trx ?? this.db;
+  }
 
   async findByOrderId(unitId: string, orderId: string): Promise<PaymentRow[]> {
     const rows = await this.db('payments as p')
@@ -81,9 +110,13 @@ export class PaymentRepository implements IPaymentRepository {
     return row ?? null;
   }
 
-  async findActiveByOrderId(orderId: string): Promise<PaymentRow | null> {
-    const row = await this.db('payments as p')
-      .select(PAYMENT_SELECT_COLUMNS)
+  async findActiveByOrderId(
+    orderId: string,
+    trx?: Knex.Transaction,
+  ): Promise<PaymentRow | null> {
+    const executor = this.getExecutor(trx);
+    const row = await executor('payments as p')
+      .select(PAYMENT_SELECT_COLUMNS_WITHOUT_ORDER_JOIN)
       .where('p.order_id', orderId)
       .whereIn('p.payment_status', ['pending', 'paid'])
       .whereNull('p.deleted_at')
@@ -108,8 +141,12 @@ export class PaymentRepository implements IPaymentRepository {
     return row ?? null;
   }
 
-  async create(data: CreatePaymentData): Promise<{ payment_id: string }> {
-    const [row] = await this.db('payments')
+  async create(
+    data: CreatePaymentData,
+    trx?: Knex.Transaction,
+  ): Promise<{ payment_id: string }> {
+    const executor = this.getExecutor(trx);
+    const [row] = await executor('payments')
       .insert({
         order_id: data.order_id,
         reference_number: data.reference_number,
@@ -118,8 +155,8 @@ export class PaymentRepository implements IPaymentRepository {
         failure_reason: data.failure_reason,
         paid_at: data.paid_at,
         expired_at: data.expired_at,
-        created_at: this.db.fn.now(),
-        updated_at: this.db.fn.now(),
+        created_at: executor.fn.now(),
+        updated_at: executor.fn.now(),
       })
       .returning(['payment_id']);
 
@@ -129,10 +166,12 @@ export class PaymentRepository implements IPaymentRepository {
   async updateStatus(
     paymentId: string,
     data: UpdatePaymentData,
+    trx?: Knex.Transaction,
   ): Promise<void> {
+    const executor = this.getExecutor(trx);
     const payload: Record<string, unknown> = {
       payment_status: data.payment_status,
-      updated_at: this.db.fn.now(),
+      updated_at: executor.fn.now(),
     };
 
     if (data.failure_reason !== undefined)
@@ -140,7 +179,7 @@ export class PaymentRepository implements IPaymentRepository {
     if (data.paid_at !== undefined) payload.paid_at = data.paid_at;
     if (data.expired_at !== undefined) payload.expired_at = data.expired_at;
 
-    await this.db('payments')
+    await executor('payments')
       .where('payment_id', paymentId)
       .whereNull('deleted_at')
       .update(payload);

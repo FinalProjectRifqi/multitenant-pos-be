@@ -93,6 +93,31 @@ export const buildOrderRouter = ({
     asyncHandler((req, res) => paymentController.getPaymentById(req, res)),
   );
 
+  // DELETE /:unitId/:orderId/payments/:paymentId — cancel cashless payment
+  router.delete(
+    '/:unitId/:orderId/payments/:paymentId',
+    requirePermission('payment:process'),
+    validateRequest(PaymentItemParamsDto, 'params'),
+    asyncHandler((req, res) =>
+      paymentController.cancelCashlessPayment(req, res),
+    ),
+  );
+
+  // POST /:unitId/:orderId/payments/:paymentId/simulate-success — simulate settlement webhook
+  // Guard: only available in local env; returns 404 in all other environments
+  router.post(
+    '/:unitId/:orderId/payments/:paymentId/simulate-success',
+    requirePermission('payment:process'),
+    validateRequest(PaymentItemParamsDto, 'params'),
+    asyncHandler(async (req, res) => {
+      if (!config.isLocalEnv) {
+        res.status(404).json({ success: false, message: 'Not found' });
+        return;
+      }
+      await paymentController.simulateMidtransSettlement(req, res);
+    }),
+  );
+
   // GET /:unitId — list all orders for a unit
   router.get(
     '/:unitId',

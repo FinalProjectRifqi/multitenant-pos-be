@@ -8,6 +8,8 @@ import { orderNotFoundError } from './errors/order.errors';
 import {
   paymentAlreadyActiveError,
   paymentAmountMismatchError,
+  paymentCannotBeCancelledError,
+  paymentCannotBeSettledError,
   paymentMidtransRequestFailedError,
   paymentNotFoundError,
   paymentOrderNotReadyError,
@@ -15,6 +17,7 @@ import {
   paymentWebhookSignatureInvalidError,
 } from './errors/payment.errors';
 import type {
+  PaymentCancelApiResponse,
   PaymentCashlessCreateApiResponse,
   PaymentCreateApiResponse,
   PaymentDetailApiResponse,
@@ -31,14 +34,46 @@ import type { IPaymentRepository } from './repositories/payment.repository';
 
 const PRICE_TOLERANCE = 1;
 const CASHLESS_EXPIRY_MINUTES = 15;
+const MIDTRANS_REQUEST_TIMEOUT_MS = 10_000;
 
-interface MidtransSnapResponse {
-  token?: string;
-  redirect_url?: string;
+interface MidtransCancelResponse {
+  status_code?: string;
+  status_message?: string;
+  transaction_status?: string;
+  fraud_status?: string;
+}
+
+type MidtransCancelResult =
+  | { kind: 'cancelled' }
+  | { kind: 'conflict'; remoteStatus: PaymentStatus }
+  | { kind: 'failed' };
+
+type CashlessPrepareResult =
+  | { kind: 'new'; paymentId: string; referenceNumber: string }
+  | { kind: 'resume'; payment: PaymentRow };
+
+interface MidtransQrisAction {
+  name: string;
+  method: string;
+  url: string;
+}
+
+interface MidtransQrisChargeResponse {
+  status_code: string;
+  status_message: string;
+  transaction_id: string;
+  order_id: string;
+  gross_amount: string;
+  payment_type: string;
+  transaction_status: string;
+  qr_string: string;
+  acquirer: string;
+  actions: MidtransQrisAction[];
 }
 
 interface MidtransWebhookPayload {
   reference_number?: string;
+  order_id?: string;
   status_code?: string;
   gross_amount?: string;
   transaction_status?: string;
@@ -58,7 +93,7 @@ export class PaymentService {
   ) {}
 
   // ===========================
-  // Cashless Payment (Midtrans Snap)
+  // Cashless Payment (Midtrans QRIS Core API)
   // ===========================
 
   async createCashlessPayment(
@@ -94,35 +129,113 @@ export class PaymentService {
       this.ensureOrderReady(order.order_status_id);
       this.validateAmount(dto.amount, order.total_amount);
 
-      const activePayment =
-        await this.paymentRepository.findActiveByOrderId(orderId);
-      if (activePayment) {
-        this.logger.warn(
-          { unitId, orderId, paymentId: activePayment.payment_id },
-          'Cashless payment failed - active payment exists',
+      // Phase 2: atomic prepare — lock the order row to prevent concurrent payment creation
+      const prepareResult =
+        await this.orderRepository.transaction<CashlessPrepareResult>(
+          async (trx) => {
+            const lockedOrder = await this.orderRepository.findByIdForUpdate(
+              unitId,
+              orderId,
+              trx,
+            );
+            if (!lockedOrder) throw orderNotFoundError();
+
+            const activePayment =
+              await this.paymentRepository.findActiveByOrderId(orderId, trx);
+            if (activePayment) {
+              if (activePayment.payment_status === 'paid') {
+                this.logger.warn(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Cashless payment failed - order already paid',
+                );
+                throw paymentAlreadyActiveError();
+              }
+
+              // Payment is 'pending' — check if it has expired
+              const nowCheck = new Date();
+              if (activePayment.expired_at <= nowCheck) {
+                // Expired — mark as expired atomically and fall through to create new
+                this.logger.info(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Existing pending payment expired — marking expired and creating new',
+                );
+                await this.paymentRepository.updateStatus(
+                  activePayment.payment_id,
+                  { payment_status: 'expired' },
+                  trx,
+                );
+                // fall through to create new payment
+              } else {
+                // Still valid — return existing payment data (no Midtrans call inside transaction)
+                this.logger.info(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Resuming existing pending QRIS payment',
+                );
+                return { kind: 'resume', payment: activePayment };
+              }
+            }
+
+            const referenceNumber = this.generateReferenceNumber(
+              lockedOrder.order_number,
+            );
+            const now = new Date();
+            const expiredAt = new Date(
+              now.getTime() + CASHLESS_EXPIRY_MINUTES * 60 * 1000,
+            );
+
+            const { payment_id } = await this.paymentRepository.create(
+              {
+                order_id: orderId,
+                reference_number: referenceNumber,
+                amount: dto.amount,
+                payment_status: 'pending',
+                failure_reason: null,
+                expired_at: expiredAt,
+              },
+              trx,
+            );
+
+            return { kind: 'new', paymentId: payment_id, referenceNumber };
+          },
         );
-        throw paymentAlreadyActiveError();
+
+      // Phase 3: post-transaction external HTTP calls
+      if (prepareResult.kind === 'resume') {
+        const { payment: activePayment } = prepareResult;
+        const qrisStatus = await this.getQrisTransactionStatus(
+          activePayment.reference_number,
+        );
+        const grossAmount = this.formatGrossAmount(activePayment.amount);
+        const webhookSignatureKey = this.buildMidtransSignature(
+          activePayment.reference_number,
+          '200',
+          grossAmount,
+        );
+        return {
+          success: true,
+          statusCode: 201,
+          message: 'Payment cashless berhasil dibuat',
+          data: {
+            payment: this.mapToResponse(activePayment),
+            qr_code_url: qrisStatus.qr_code_url,
+            qr_string: qrisStatus.qr_string,
+            acquirer: qrisStatus.acquirer,
+            webhook_signature_key: webhookSignatureKey,
+          },
+        };
       }
 
-      const referenceNumber = this.generateReferenceNumber(order.order_number);
-      const now = new Date();
-      const expiredAt = new Date(
-        now.getTime() + CASHLESS_EXPIRY_MINUTES * 60 * 1000,
-      );
+      // kind === 'new'
+      const { paymentId: payment_id, referenceNumber } = prepareResult;
 
-      const { payment_id } = await this.paymentRepository.create({
-        order_id: orderId,
-        reference_number: referenceNumber,
-        amount: dto.amount,
-        payment_status: 'pending',
-        failure_reason: null,
-        paid_at: now,
-        expired_at: expiredAt,
-      });
-
-      let snapResult: { token: string; redirect_url: string };
+      let qrisResult: {
+        transaction_id: string;
+        qr_code_url: string;
+        qr_string: string;
+        acquirer: string;
+      };
       try {
-        snapResult = await this.requestSnapTransaction(
+        qrisResult = await this.chargeQris(
           referenceNumber,
           dto.amount,
           order.customer_name,
@@ -183,8 +296,9 @@ export class PaymentService {
         message: 'Payment cashless berhasil dibuat',
         data: {
           payment: this.mapToResponse(payment),
-          snap_token: snapResult.token,
-          redirect_url: snapResult.redirect_url,
+          qr_code_url: qrisResult.qr_code_url,
+          qr_string: qrisResult.qr_string,
+          acquirer: qrisResult.acquirer,
           webhook_signature_key: webhookSignatureKey,
         },
       };
@@ -246,14 +360,29 @@ export class PaymentService {
       const referenceNumber = this.generateReferenceNumber(order.order_number);
       const now = new Date();
 
-      const { payment_id } = await this.paymentRepository.create({
-        order_id: orderId,
-        reference_number: referenceNumber,
-        amount: dto.amount,
-        payment_status: 'paid',
-        failure_reason: null,
-        paid_at: now,
-        expired_at: now,
+      // Atomic: create payment + update order in one transaction
+      const payment_id = await this.orderRepository.transaction(async (trx) => {
+        const { payment_id: pid } = await this.paymentRepository.create(
+          {
+            order_id: orderId,
+            reference_number: referenceNumber,
+            amount: dto.amount,
+            payment_status: 'paid',
+            failure_reason: null,
+            paid_at: now,
+            expired_at: now,
+          },
+          trx,
+        );
+        await this.orderRepository.update(
+          orderId,
+          {
+            order_status_id: this.config.order.completeStatusUuid,
+            completed_at: now,
+          },
+          trx,
+        );
+        return pid;
       });
 
       const payment = await this.paymentRepository.findById(
@@ -420,6 +549,109 @@ export class PaymentService {
   }
 
   // ===========================
+  // Cancel Cashless Payment
+  // ===========================
+
+  async cancelCashlessPayment(
+    unitId: string,
+    orderId: string,
+    paymentId: string,
+    userId: string,
+  ): Promise<PaymentCancelApiResponse> {
+    try {
+      this.logger.info(
+        { unitId, orderId, paymentId, userId },
+        'Cancelling cashless payment',
+      );
+
+      const unit = await this.orderRepository.findUnitById(unitId);
+      if (!unit) {
+        this.logger.warn({ unitId }, 'Cancel payment failed - unit not found');
+        throw unitNotFoundError();
+      }
+
+      const order = await this.orderRepository.findById(unitId, orderId);
+      if (!order) {
+        this.logger.warn(
+          { unitId, orderId },
+          'Cancel payment failed - order not found',
+        );
+        throw orderNotFoundError();
+      }
+
+      const payment = await this.paymentRepository.findById(
+        unitId,
+        orderId,
+        paymentId,
+      );
+      if (!payment) {
+        this.logger.warn(
+          { unitId, orderId, paymentId },
+          'Cancel payment failed - payment not found',
+        );
+        throw paymentNotFoundError();
+      }
+
+      if (payment.payment_status !== 'pending') {
+        this.logger.warn(
+          { unitId, orderId, paymentId, status: payment.payment_status },
+          'Cancel payment failed - payment not in pending status',
+        );
+        throw paymentCannotBeCancelledError();
+      }
+
+      // Try to cancel at Midtrans — handles cancel-vs-settlement race
+      const cancelResult = await this.tryMidtransCancel(
+        payment.reference_number,
+      );
+
+      if (cancelResult.kind === 'conflict') {
+        // Midtrans reports transaction already settled — sync local DB and abort cancel
+        this.logger.warn(
+          {
+            unitId,
+            orderId,
+            paymentId,
+            remoteStatus: cancelResult.remoteStatus,
+          },
+          'Cancel aborted — Midtrans transaction already settled; syncing local status',
+        );
+        await this.paymentRepository.updateStatus(paymentId, {
+          payment_status: cancelResult.remoteStatus,
+        });
+        throw paymentCannotBeCancelledError();
+      }
+
+      // 'cancelled' or 'failed' (best-effort) — mark as cancelled locally
+      await this.paymentRepository.updateStatus(paymentId, {
+        payment_status: 'cancelled',
+      });
+
+      this.logger.info(
+        { unitId, orderId, paymentId },
+        'Cashless payment cancelled successfully',
+      );
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Payment cashless berhasil dibatalkan',
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, unitId, orderId, paymentId, userId },
+        'Unexpected error while cancelling cashless payment',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  // ===========================
   // Midtrans Webhook Handler
   // ===========================
 
@@ -427,48 +659,45 @@ export class PaymentService {
     payload: MidtransWebhookPayload,
   ): Promise<PaymentWebhookApiResponse> {
     try {
+      const referenceNumber = payload.reference_number ?? payload.order_id;
+
       this.logger.info(
         {
-          referenceNumber: payload.reference_number,
+          referenceNumber,
+          orderId: payload.order_id,
           status: payload.transaction_status,
         },
         'Handling Midtrans webhook',
       );
 
-      const { reference_number, status_code, gross_amount, signature_key } =
-        payload;
+      const { status_code, gross_amount, signature_key } = payload;
 
-      if (
-        !reference_number ||
-        !status_code ||
-        !gross_amount ||
-        !signature_key
-      ) {
+      if (!referenceNumber || !status_code || !gross_amount || !signature_key) {
         this.logger.warn({ payload }, 'Webhook payload missing fields');
         throw paymentWebhookInvalidPayloadError();
       }
 
       if (
         !this.isValidMidtransSignature(
-          reference_number,
+          referenceNumber,
           status_code,
           gross_amount,
           signature_key,
         )
       ) {
         this.logger.warn(
-          { referenceNumber: reference_number, grossAmount: gross_amount },
+          { referenceNumber, grossAmount: gross_amount },
           'Webhook signature verification failed',
         );
         throw paymentWebhookSignatureInvalidError();
       }
 
       const payment =
-        await this.paymentRepository.findByReferenceNumber(reference_number);
+        await this.paymentRepository.findByReferenceNumber(referenceNumber);
 
       if (!payment) {
         this.logger.warn(
-          { referenceNumber: reference_number },
+          { referenceNumber },
           'Webhook ignored - payment not found',
         );
         return {
@@ -484,7 +713,7 @@ export class PaymentService {
       if (!nextStatus) {
         this.logger.warn(
           {
-            referenceNumber: reference_number,
+            referenceNumber,
             status: payload.transaction_status,
           },
           'Webhook ignored - unhandled status',
@@ -498,7 +727,7 @@ export class PaymentService {
 
       if (this.isFinalStatus(payment.payment_status)) {
         this.logger.info(
-          { referenceNumber: reference_number, status: payment.payment_status },
+          { referenceNumber, status: payment.payment_status },
           'Webhook ignored - payment already final',
         );
         return {
@@ -518,8 +747,24 @@ export class PaymentService {
         expired_at: nextStatus === 'expired' ? now : undefined,
       });
 
+      if (nextStatus === 'paid') {
+        if (payment.unit_id) {
+          await this.markOrderCompleteIfReady(
+            payment.unit_id,
+            payment.order_id,
+            now,
+            'midtrans webhook settlement',
+          );
+        } else {
+          this.logger.warn(
+            { referenceNumber, orderId: payment.order_id },
+            'Order completion skipped - payment missing unit id',
+          );
+        }
+      }
+
       this.logger.info(
-        { referenceNumber: reference_number, status: nextStatus },
+        { referenceNumber, status: nextStatus },
         'Webhook processed successfully',
       );
 
@@ -531,8 +776,103 @@ export class PaymentService {
     } catch (error) {
       if (error instanceof AppError) throw error;
       this.logger.error(
-        { err: error, referenceNumber: payload.reference_number },
+        {
+          err: error,
+          referenceNumber: payload.reference_number ?? payload.order_id,
+        },
         'Unexpected error while handling webhook',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async simulateMidtransSettlement(
+    unitId: string,
+    orderId: string,
+    paymentId: string,
+    userId: string,
+  ): Promise<PaymentWebhookApiResponse> {
+    try {
+      this.logger.info(
+        { unitId, orderId, paymentId, userId },
+        'Simulating Midtrans settlement webhook',
+      );
+
+      const unit = await this.orderRepository.findUnitById(unitId);
+      if (!unit) {
+        this.logger.warn(
+          { unitId },
+          'Simulate settlement failed - unit not found',
+        );
+        throw unitNotFoundError();
+      }
+
+      const order = await this.orderRepository.findById(unitId, orderId);
+      if (!order) {
+        this.logger.warn(
+          { unitId, orderId },
+          'Simulate settlement failed - order not found',
+        );
+        throw orderNotFoundError();
+      }
+
+      const payment = await this.paymentRepository.findById(
+        unitId,
+        orderId,
+        paymentId,
+      );
+      if (!payment) {
+        this.logger.warn(
+          { unitId, orderId, paymentId },
+          'Simulate settlement failed - payment not found',
+        );
+        throw paymentNotFoundError();
+      }
+
+      if (payment.payment_status === 'paid') {
+        this.logger.info(
+          { unitId, orderId, paymentId },
+          'Simulate settlement ignored - payment already paid',
+        );
+        return {
+          success: true,
+          statusCode: 200,
+          message: 'Webhook diterima',
+        };
+      }
+
+      if (payment.payment_status !== 'pending') {
+        this.logger.warn(
+          { unitId, orderId, paymentId, status: payment.payment_status },
+          'Simulate settlement failed - payment not pending',
+        );
+        throw paymentCannotBeSettledError();
+      }
+
+      const grossAmount = this.formatGrossAmount(payment.amount);
+      const payload: MidtransWebhookPayload = {
+        reference_number: payment.reference_number,
+        status_code: '200',
+        gross_amount: grossAmount,
+        transaction_status: 'settlement',
+        fraud_status: 'accept',
+        signature_key: this.buildMidtransSignature(
+          payment.reference_number,
+          '200',
+          grossAmount,
+        ),
+      };
+
+      return await this.handleMidtransWebhook(payload);
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, unitId, orderId, paymentId, userId },
+        'Unexpected error while simulating Midtrans settlement webhook',
       );
       throw new AppError({
         code: ErrorCodes.Internal,
@@ -550,6 +890,60 @@ export class PaymentService {
     if (orderStatusId !== this.config.order.readyStatusUuid) {
       throw paymentOrderNotReadyError();
     }
+  }
+
+  private async markOrderCompleteIfReady(
+    unitId: string,
+    orderId: string,
+    completedAt: Date,
+    reason: string,
+  ): Promise<void> {
+    await this.orderRepository.transaction(async (trx) => {
+      const order = await this.orderRepository.findByIdForUpdate(
+        unitId,
+        orderId,
+        trx,
+      );
+      if (!order) {
+        this.logger.warn(
+          { unitId, orderId, reason },
+          'Order completion skipped - order not found',
+        );
+        return;
+      }
+
+      if (order.order_status_id !== this.config.order.readyStatusUuid) {
+        this.logger.info(
+          {
+            unitId,
+            orderId,
+            currentStatusId: order.order_status_id,
+            reason,
+          },
+          'Order completion skipped - current status is not ready',
+        );
+        return;
+      }
+
+      await this.orderRepository.update(
+        orderId,
+        {
+          order_status_id: this.config.order.completeStatusUuid,
+          completed_at: completedAt,
+        },
+        trx,
+      );
+    });
+
+    this.logger.info(
+      {
+        unitId,
+        orderId,
+        completeStatusId: this.config.order.completeStatusUuid,
+        reason,
+      },
+      'Order status updated to complete',
+    );
   }
 
   private validateAmount(submittedAmount: number, orderAmount: number): void {
@@ -571,23 +965,33 @@ export class PaymentService {
     return `PAY-${orderNumber}-${year}${month}${day}${hours}${minutes}${seconds}`;
   }
 
-  private async requestSnapTransaction(
+  private async chargeQris(
     referenceNumber: string,
     amount: number,
     customerName: string,
-  ): Promise<{ token: string; redirect_url: string }> {
+  ): Promise<{
+    transaction_id: string;
+    qr_code_url: string;
+    qr_string: string;
+    acquirer: string;
+  }> {
     try {
+      const grossAmount = this.formatGrossAmount(amount);
       const payload = {
+        payment_type: 'qris',
         transaction_details: {
           order_id: referenceNumber,
-          gross_amount: Number(this.formatGrossAmount(amount)),
+          gross_amount: Number(grossAmount),
         },
         customer_details: {
           first_name: customerName,
         },
-        expiry: {
-          unit: 'minutes',
-          duration: CASHLESS_EXPIRY_MINUTES,
+        qris: {
+          acquirer: 'gopay',
+        },
+        custom_expiry: {
+          expiry_duration: CASHLESS_EXPIRY_MINUTES,
+          unit: 'minute',
         },
       };
 
@@ -595,8 +999,8 @@ export class PaymentService {
         `${this.config.midtrans.serverKey}:`,
       ).toString('base64');
 
-      const response = await fetch(
-        `${this.config.midtrans.snapBaseUrl}/transactions`,
+      const response = await this.fetchMidtrans(
+        `${this.config.midtrans.coreApiBaseUrl}/v2/charge`,
         {
           method: 'POST',
           headers: {
@@ -612,26 +1016,175 @@ export class PaymentService {
         const body = await response.text();
         this.logger.error(
           { status: response.status, body },
-          'Midtrans snap request failed',
+          'Midtrans QRIS charge request failed',
         );
         throw paymentMidtransRequestFailedError();
       }
 
-      const data = (await response.json()) as MidtransSnapResponse;
+      const data = (await response.json()) as MidtransQrisChargeResponse;
 
-      if (!data.token || !data.redirect_url) {
-        this.logger.error({ data }, 'Midtrans snap response missing fields');
+      const qrCodeUrl = data.actions?.find(
+        (a) => a.name === 'generate-qr-code',
+      )?.url;
+
+      if (!qrCodeUrl) {
+        this.logger.error(
+          { data },
+          'Midtrans QRIS response missing qr-code action',
+        );
         throw paymentMidtransRequestFailedError();
       }
 
       return {
-        token: data.token,
-        redirect_url: `${data.redirect_url}#/other-qris`,
+        transaction_id: data.transaction_id,
+        qr_code_url: qrCodeUrl,
+        qr_string: data.qr_string,
+        acquirer: data.acquirer,
       };
     } catch (error) {
       if (error instanceof AppError) throw error;
-      this.logger.error({ err: error }, 'Midtrans snap request error');
+      this.logger.error({ err: error }, 'Midtrans QRIS charge request error');
       throw paymentMidtransRequestFailedError();
+    }
+  }
+
+  private async getQrisTransactionStatus(referenceNumber: string): Promise<{
+    qr_code_url: string;
+    qr_string: string;
+    acquirer: string;
+  }> {
+    try {
+      const authToken = Buffer.from(
+        `${this.config.midtrans.serverKey}:`,
+      ).toString('base64');
+
+      const response = await this.fetchMidtrans(
+        `${this.config.midtrans.coreApiBaseUrl}/v2/${referenceNumber}/status`,
+        {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Basic ${authToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const body = await response.text();
+        this.logger.error(
+          { status: response.status, body, referenceNumber },
+          'Midtrans QRIS status request failed',
+        );
+        throw paymentMidtransRequestFailedError();
+      }
+
+      const data = (await response.json()) as MidtransQrisChargeResponse;
+
+      const qrCodeUrl = data.actions?.find(
+        (a) => a.name === 'generate-qr-code',
+      )?.url;
+
+      if (!qrCodeUrl) {
+        this.logger.error(
+          { data, referenceNumber },
+          'Midtrans QRIS status response missing qr-code action',
+        );
+        throw paymentMidtransRequestFailedError();
+      }
+
+      return {
+        qr_code_url: qrCodeUrl,
+        qr_string: data.qr_string,
+        acquirer: data.acquirer,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, referenceNumber },
+        'Midtrans QRIS status request error',
+      );
+      throw paymentMidtransRequestFailedError();
+    }
+  }
+
+  private async tryMidtransCancel(
+    referenceNumber: string,
+  ): Promise<MidtransCancelResult> {
+    try {
+      const authToken = Buffer.from(
+        `${this.config.midtrans.serverKey}:`,
+      ).toString('base64');
+
+      const response = await this.fetchMidtrans(
+        `${this.config.midtrans.coreApiBaseUrl}/v2/${referenceNumber}/cancel`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Basic ${authToken}`,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        const payloadText = await response.text();
+        if (response.status === 412) {
+          // Midtrans returns 412 when transaction is already in a final state
+          const parsed = this.parseMidtransCancelResponse(payloadText);
+          if (parsed?.transaction_status) {
+            const remoteStatus = this.mapMidtransStatus({
+              transaction_status: parsed.transaction_status,
+              fraud_status: parsed.fraud_status,
+            });
+            if (remoteStatus && this.isFinalStatus(remoteStatus)) {
+              return { kind: 'conflict', remoteStatus };
+            }
+          }
+        }
+        this.logger.warn(
+          { status: response.status, body: payloadText, referenceNumber },
+          'Midtrans cancel request failed \u2014 continuing with local cancellation',
+        );
+        return { kind: 'failed' };
+      }
+
+      this.logger.info(
+        { referenceNumber },
+        'Midtrans QRIS transaction cancelled successfully',
+      );
+      return { kind: 'cancelled' };
+    } catch (error) {
+      this.logger.warn(
+        { err: error, referenceNumber },
+        'Failed to cancel Midtrans transaction \u2014 continuing with local cancellation',
+      );
+      return { kind: 'failed' };
+    }
+  }
+
+  private parseMidtransCancelResponse(
+    text: string,
+  ): MidtransCancelResponse | null {
+    try {
+      return JSON.parse(text) as MidtransCancelResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchMidtrans(
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      MIDTRANS_REQUEST_TIMEOUT_MS,
+    );
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
