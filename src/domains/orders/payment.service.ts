@@ -9,6 +9,7 @@ import {
   paymentAlreadyActiveError,
   paymentAmountMismatchError,
   paymentCannotBeCancelledError,
+  paymentCannotBeSettledError,
   paymentMidtransRequestFailedError,
   paymentNotFoundError,
   paymentOrderNotReadyError,
@@ -33,6 +34,23 @@ import type { IPaymentRepository } from './repositories/payment.repository';
 
 const PRICE_TOLERANCE = 1;
 const CASHLESS_EXPIRY_MINUTES = 15;
+const MIDTRANS_REQUEST_TIMEOUT_MS = 10_000;
+
+interface MidtransCancelResponse {
+  status_code?: string;
+  status_message?: string;
+  transaction_status?: string;
+  fraud_status?: string;
+}
+
+type MidtransCancelResult =
+  | { kind: 'cancelled' }
+  | { kind: 'conflict'; remoteStatus: PaymentStatus }
+  | { kind: 'failed' };
+
+type CashlessPrepareResult =
+  | { kind: 'new'; paymentId: string; referenceNumber: string }
+  | { kind: 'resume'; payment: PaymentRow };
 
 interface MidtransQrisAction {
   name: string;
@@ -111,83 +129,104 @@ export class PaymentService {
       this.ensureOrderReady(order.order_status_id);
       this.validateAmount(dto.amount, order.total_amount);
 
-      const activePayment =
-        await this.paymentRepository.findActiveByOrderId(orderId);
-      if (activePayment) {
-        if (activePayment.payment_status === 'paid') {
-          this.logger.warn(
-            { unitId, orderId, paymentId: activePayment.payment_id },
-            'Cashless payment failed - order already paid',
-          );
-          throw paymentAlreadyActiveError();
-        }
+      // Phase 2: atomic prepare — lock the order row to prevent concurrent payment creation
+      const prepareResult =
+        await this.orderRepository.transaction<CashlessPrepareResult>(
+          async (trx) => {
+            const lockedOrder = await this.orderRepository.findByIdForUpdate(
+              unitId,
+              orderId,
+              trx,
+            );
+            if (!lockedOrder) throw orderNotFoundError();
 
-        // Payment is 'pending' — check if it has expired
-        const nowCheck = new Date();
-        if (activePayment.expired_at <= nowCheck) {
-          // Expired locally — mark as expired and fall through to create new
-          this.logger.info(
-            { unitId, orderId, paymentId: activePayment.payment_id },
-            'Existing pending payment expired — marking expired and creating new',
-          );
-          try {
-            await this.paymentRepository.updateStatus(
-              activePayment.payment_id,
+            const activePayment =
+              await this.paymentRepository.findActiveByOrderId(orderId, trx);
+            if (activePayment) {
+              if (activePayment.payment_status === 'paid') {
+                this.logger.warn(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Cashless payment failed - order already paid',
+                );
+                throw paymentAlreadyActiveError();
+              }
+
+              // Payment is 'pending' — check if it has expired
+              const nowCheck = new Date();
+              if (activePayment.expired_at <= nowCheck) {
+                // Expired — mark as expired atomically and fall through to create new
+                this.logger.info(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Existing pending payment expired — marking expired and creating new',
+                );
+                await this.paymentRepository.updateStatus(
+                  activePayment.payment_id,
+                  { payment_status: 'expired' },
+                  trx,
+                );
+                // fall through to create new payment
+              } else {
+                // Still valid — return existing payment data (no Midtrans call inside transaction)
+                this.logger.info(
+                  { unitId, orderId, paymentId: activePayment.payment_id },
+                  'Resuming existing pending QRIS payment',
+                );
+                return { kind: 'resume', payment: activePayment };
+              }
+            }
+
+            const referenceNumber = this.generateReferenceNumber(
+              lockedOrder.order_number,
+            );
+            const now = new Date();
+            const expiredAt = new Date(
+              now.getTime() + CASHLESS_EXPIRY_MINUTES * 60 * 1000,
+            );
+
+            const { payment_id } = await this.paymentRepository.create(
               {
-                payment_status: 'expired',
+                order_id: orderId,
+                reference_number: referenceNumber,
+                amount: dto.amount,
+                payment_status: 'pending',
+                failure_reason: null,
+                expired_at: expiredAt,
               },
+              trx,
             );
-          } catch (updateError) {
-            this.logger.error(
-              { err: updateError, paymentId: activePayment.payment_id },
-              'Failed to mark expired payment as expired',
-            );
-          }
-          // fall through to create new payment
-        } else {
-          // Still valid — fetch QR from Midtrans and return existing payment
-          this.logger.info(
-            { unitId, orderId, paymentId: activePayment.payment_id },
-            'Resuming existing pending QRIS payment',
-          );
-          const qrisStatus = await this.getQrisTransactionStatus(
-            activePayment.reference_number,
-          );
-          const grossAmount = this.formatGrossAmount(activePayment.amount);
-          const webhookSignatureKey = this.buildMidtransSignature(
-            activePayment.reference_number,
-            '200',
-            grossAmount,
-          );
-          return {
-            success: true,
-            statusCode: 201,
-            message: 'Payment cashless berhasil dibuat',
-            data: {
-              payment: this.mapToResponse(activePayment),
-              qr_code_url: qrisStatus.qr_code_url,
-              qr_string: qrisStatus.qr_string,
-              acquirer: qrisStatus.acquirer,
-              webhook_signature_key: webhookSignatureKey,
-            },
-          };
-        }
+
+            return { kind: 'new', paymentId: payment_id, referenceNumber };
+          },
+        );
+
+      // Phase 3: post-transaction external HTTP calls
+      if (prepareResult.kind === 'resume') {
+        const { payment: activePayment } = prepareResult;
+        const qrisStatus = await this.getQrisTransactionStatus(
+          activePayment.reference_number,
+        );
+        const grossAmount = this.formatGrossAmount(activePayment.amount);
+        const webhookSignatureKey = this.buildMidtransSignature(
+          activePayment.reference_number,
+          '200',
+          grossAmount,
+        );
+        return {
+          success: true,
+          statusCode: 201,
+          message: 'Payment cashless berhasil dibuat',
+          data: {
+            payment: this.mapToResponse(activePayment),
+            qr_code_url: qrisStatus.qr_code_url,
+            qr_string: qrisStatus.qr_string,
+            acquirer: qrisStatus.acquirer,
+            webhook_signature_key: webhookSignatureKey,
+          },
+        };
       }
 
-      const referenceNumber = this.generateReferenceNumber(order.order_number);
-      const now = new Date();
-      const expiredAt = new Date(
-        now.getTime() + CASHLESS_EXPIRY_MINUTES * 60 * 1000,
-      );
-
-      const { payment_id } = await this.paymentRepository.create({
-        order_id: orderId,
-        reference_number: referenceNumber,
-        amount: dto.amount,
-        payment_status: 'pending',
-        failure_reason: null,
-        expired_at: expiredAt,
-      });
+      // kind === 'new'
+      const { paymentId: payment_id, referenceNumber } = prepareResult;
 
       let qrisResult: {
         transaction_id: string;
@@ -320,22 +359,31 @@ export class PaymentService {
 
       const referenceNumber = this.generateReferenceNumber(order.order_number);
       const now = new Date();
-      const { payment_id } = await this.paymentRepository.create({
-        order_id: orderId,
-        reference_number: referenceNumber,
-        amount: dto.amount,
-        payment_status: 'paid',
-        failure_reason: null,
-        paid_at: now,
-        expired_at: now,
-      });
 
-      await this.markOrderCompleteIfReady(
-        unitId,
-        orderId,
-        now,
-        'cash payment created',
-      );
+      // Atomic: create payment + update order in one transaction
+      const payment_id = await this.orderRepository.transaction(async (trx) => {
+        const { payment_id: pid } = await this.paymentRepository.create(
+          {
+            order_id: orderId,
+            reference_number: referenceNumber,
+            amount: dto.amount,
+            payment_status: 'paid',
+            failure_reason: null,
+            paid_at: now,
+            expired_at: now,
+          },
+          trx,
+        );
+        await this.orderRepository.update(
+          orderId,
+          {
+            order_status_id: this.config.order.completeStatusUuid,
+            completed_at: now,
+          },
+          trx,
+        );
+        return pid;
+      });
 
       const payment = await this.paymentRepository.findById(
         unitId,
@@ -552,10 +600,29 @@ export class PaymentService {
         throw paymentCannotBeCancelledError();
       }
 
-      // Try to cancel at Midtrans (best-effort — does not throw)
-      await this.tryMidtransCancel(payment.reference_number);
+      // Try to cancel at Midtrans — handles cancel-vs-settlement race
+      const cancelResult = await this.tryMidtransCancel(
+        payment.reference_number,
+      );
 
-      // Mark as cancelled in DB
+      if (cancelResult.kind === 'conflict') {
+        // Midtrans reports transaction already settled — sync local DB and abort cancel
+        this.logger.warn(
+          {
+            unitId,
+            orderId,
+            paymentId,
+            remoteStatus: cancelResult.remoteStatus,
+          },
+          'Cancel aborted — Midtrans transaction already settled; syncing local status',
+        );
+        await this.paymentRepository.updateStatus(paymentId, {
+          payment_status: cancelResult.remoteStatus,
+        });
+        throw paymentCannotBeCancelledError();
+      }
+
+      // 'cancelled' or 'failed' (best-effort) — mark as cancelled locally
       await this.paymentRepository.updateStatus(paymentId, {
         payment_status: 'cancelled',
       });
@@ -783,7 +850,7 @@ export class PaymentService {
           { unitId, orderId, paymentId, status: payment.payment_status },
           'Simulate settlement failed - payment not pending',
         );
-        throw paymentCannotBeCancelledError();
+        throw paymentCannotBeSettledError();
       }
 
       const grossAmount = this.formatGrossAmount(payment.amount);
@@ -831,29 +898,33 @@ export class PaymentService {
     completedAt: Date,
     reason: string,
   ): Promise<void> {
-    const order = await this.orderRepository.findById(unitId, orderId);
-    if (!order) {
-      this.logger.warn(
-        { unitId, orderId, reason },
-        'Order completion skipped - order not found',
-      );
-      return;
-    }
-
-    if (order.order_status_id !== this.config.order.readyStatusUuid) {
-      this.logger.info(
-        {
-          unitId,
-          orderId,
-          currentStatusId: order.order_status_id,
-          reason,
-        },
-        'Order completion skipped - current status is not ready',
-      );
-      return;
-    }
-
     await this.orderRepository.transaction(async (trx) => {
+      const order = await this.orderRepository.findByIdForUpdate(
+        unitId,
+        orderId,
+        trx,
+      );
+      if (!order) {
+        this.logger.warn(
+          { unitId, orderId, reason },
+          'Order completion skipped - order not found',
+        );
+        return;
+      }
+
+      if (order.order_status_id !== this.config.order.readyStatusUuid) {
+        this.logger.info(
+          {
+            unitId,
+            orderId,
+            currentStatusId: order.order_status_id,
+            reason,
+          },
+          'Order completion skipped - current status is not ready',
+        );
+        return;
+      }
+
       await this.orderRepository.update(
         orderId,
         {
@@ -928,7 +999,7 @@ export class PaymentService {
         `${this.config.midtrans.serverKey}:`,
       ).toString('base64');
 
-      const response = await fetch(
+      const response = await this.fetchMidtrans(
         `${this.config.midtrans.coreApiBaseUrl}/v2/charge`,
         {
           method: 'POST',
@@ -987,7 +1058,7 @@ export class PaymentService {
         `${this.config.midtrans.serverKey}:`,
       ).toString('base64');
 
-      const response = await fetch(
+      const response = await this.fetchMidtrans(
         `${this.config.midtrans.coreApiBaseUrl}/v2/${referenceNumber}/status`,
         {
           method: 'GET',
@@ -1036,13 +1107,15 @@ export class PaymentService {
     }
   }
 
-  private async tryMidtransCancel(referenceNumber: string): Promise<void> {
+  private async tryMidtransCancel(
+    referenceNumber: string,
+  ): Promise<MidtransCancelResult> {
     try {
       const authToken = Buffer.from(
         `${this.config.midtrans.serverKey}:`,
       ).toString('base64');
 
-      const response = await fetch(
+      const response = await this.fetchMidtrans(
         `${this.config.midtrans.coreApiBaseUrl}/v2/${referenceNumber}/cancel`,
         {
           method: 'POST',
@@ -1054,23 +1127,64 @@ export class PaymentService {
       );
 
       if (!response.ok) {
-        const body = await response.text();
+        const payloadText = await response.text();
+        if (response.status === 412) {
+          // Midtrans returns 412 when transaction is already in a final state
+          const parsed = this.parseMidtransCancelResponse(payloadText);
+          if (parsed?.transaction_status) {
+            const remoteStatus = this.mapMidtransStatus({
+              transaction_status: parsed.transaction_status,
+              fraud_status: parsed.fraud_status,
+            });
+            if (remoteStatus && this.isFinalStatus(remoteStatus)) {
+              return { kind: 'conflict', remoteStatus };
+            }
+          }
+        }
         this.logger.warn(
-          { status: response.status, body, referenceNumber },
+          { status: response.status, body: payloadText, referenceNumber },
           'Midtrans cancel request failed \u2014 continuing with local cancellation',
         );
-        return;
+        return { kind: 'failed' };
       }
 
       this.logger.info(
         { referenceNumber },
         'Midtrans QRIS transaction cancelled successfully',
       );
+      return { kind: 'cancelled' };
     } catch (error) {
       this.logger.warn(
         { err: error, referenceNumber },
         'Failed to cancel Midtrans transaction \u2014 continuing with local cancellation',
       );
+      return { kind: 'failed' };
+    }
+  }
+
+  private parseMidtransCancelResponse(
+    text: string,
+  ): MidtransCancelResponse | null {
+    try {
+      return JSON.parse(text) as MidtransCancelResponse;
+    } catch {
+      return null;
+    }
+  }
+
+  private async fetchMidtrans(
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      MIDTRANS_REQUEST_TIMEOUT_MS,
+    );
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 

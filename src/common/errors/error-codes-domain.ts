@@ -50,6 +50,7 @@ export const DomainErrorCodes = {
   PaymentWebhookInvalidPayload: 'PAYMENT_WEBHOOK_INVALID_PAYLOAD',
   PaymentMidtransRequestFailed: 'PAYMENT_MIDTRANS_REQUEST_FAILED',
   PaymentCannotBeCancelled: 'PAYMENT_CANNOT_BE_CANCELLED',
+  PaymentCannotBeSettled: 'PAYMENT_CANNOT_BE_SETTLED',
 } as const;
 
 export type DomainErrorCode =

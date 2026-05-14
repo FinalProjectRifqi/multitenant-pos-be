@@ -66,7 +66,16 @@ export const getAppConfig = (): AppConfig => {
     SERVER_SECRET_KEY: str(),
     MERCHANT_ID: str(),
     MIDTRANS_BASE_URL: str({
-      desc: 'Base URL untuk API Midtrans, misal https://api.sandbox.midtrans.com atau https://api.midtrans.com',
+      default: '',
+      desc: 'Legacy: base URL untuk Midtrans Core API. Gunakan MIDTRANS_CORE_API_BASE_URL.',
+    }),
+    MIDTRANS_CORE_API_BASE_URL: str({
+      default: '',
+      desc: 'Base URL untuk Midtrans Core API, misal https://api.sandbox.midtrans.com',
+    }),
+    MIDTRANS_SNAP_BASE_URL: str({
+      default: '',
+      desc: 'Base URL untuk Midtrans Snap API, misal https://app.sandbox.midtrans.com/snap/v1',
     }),
   });
 
@@ -99,8 +108,19 @@ export const getAppConfig = (): AppConfig => {
       serverKey: env.SERVER_SECRET_KEY,
       clientKey: env.CLIENT_SECRET_KEY,
       merchantId: env.MERCHANT_ID,
-      snapBaseUrl: `${env.MIDTRANS_BASE_URL}/snap/v1`,
-      coreApiBaseUrl: env.MIDTRANS_BASE_URL,
+      coreApiBaseUrl: (
+        env.MIDTRANS_CORE_API_BASE_URL ||
+        env.MIDTRANS_BASE_URL ||
+        (nodeEnv === 'production'
+          ? 'https://api.midtrans.com'
+          : 'https://api.sandbox.midtrans.com')
+      ).replace(/\/$/, ''),
+      snapBaseUrl: (
+        env.MIDTRANS_SNAP_BASE_URL ||
+        (nodeEnv === 'production'
+          ? 'https://app.midtrans.com/snap/v1'
+          : 'https://app.sandbox.midtrans.com/snap/v1')
+      ).replace(/\/$/, ''),
       isProduction: nodeEnv === 'production',
     },
     isLocalEnv: nodeEnv === 'local',

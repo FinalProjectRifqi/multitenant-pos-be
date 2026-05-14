@@ -56,3 +56,10 @@ export const paymentCannotBeCancelledError = (): AppError =>
     message: 'Payment tidak dapat dibatalkan karena statusnya sudah berubah',
     status: 409,
   });
+
+export const paymentCannotBeSettledError = (): AppError =>
+  new AppError({
+    code: DomainErrorCodes.PaymentCannotBeSettled,
+    message: 'Payment tidak dapat di-settle karena statusnya bukan pending',
+    status: 409,
+  });

@@ -93,6 +93,11 @@ export interface IOrderRepository {
     params: FindAllOrdersParams,
   ): Promise<{ data: OrderRow[]; total: number }>;
   findById(unitId: string, orderId: string): Promise<OrderRow | null>;
+  findByIdForUpdate(
+    unitId: string,
+    orderId: string,
+    trx: Knex.Transaction,
+  ): Promise<OrderRow | null>;
   findOrderItemsByOrderId(orderId: string): Promise<OrderItemRow[]>;
 
   countOrdersToday(unitId: string): Promise<number>;
@@ -329,6 +334,43 @@ export class OrderRepository implements IOrderRepository {
 
   async findById(unitId: string, orderId: string): Promise<OrderRow | null> {
     const row = await this.db('orders as o')
+      .leftJoin('order_types as ot', function () {
+        this.on('ot.order_type_id', '=', 'o.order_type_id').andOnNull(
+          'ot.deleted_at',
+        );
+      })
+      .leftJoin('order_status as os', function () {
+        this.on('os.order_status_id', '=', 'o.order_status_id').andOnNull(
+          'os.deleted_at',
+        );
+      })
+      .select(ORDER_LIST_SELECT_COLUMNS)
+      .where('o.order_id', orderId)
+      .where('o.unit_id', unitId)
+      .whereNull('o.deleted_at')
+      .first<OrderRow | undefined>();
+
+    return row ?? null;
+  }
+
+  async findByIdForUpdate(
+    unitId: string,
+    orderId: string,
+    trx: Knex.Transaction,
+  ): Promise<OrderRow | null> {
+    // PostgreSQL disallows FOR UPDATE on the nullable side of a LEFT JOIN,
+    // so lock only the orders row first, then fetch the full joined data.
+    const locked = await trx('orders')
+      .select('order_id')
+      .where('order_id', orderId)
+      .where('unit_id', unitId)
+      .whereNull('deleted_at')
+      .forUpdate()
+      .first<{ order_id: string } | undefined>();
+
+    if (!locked) return null;
+
+    const row = await trx('orders as o')
       .leftJoin('order_types as ot', function () {
         this.on('ot.order_type_id', '=', 'o.order_type_id').andOnNull(
           'ot.deleted_at',

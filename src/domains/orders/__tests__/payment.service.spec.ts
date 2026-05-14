@@ -21,6 +21,7 @@ const createMockOrderRepository = (): jest.Mocked<IOrderRepository> =>
     findMenuItemsByIds: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
+    findByIdForUpdate: jest.fn(),
     findOrderItemsByOrderId: jest.fn(),
     countOrdersToday: jest.fn(),
     create: jest.fn(),
@@ -162,6 +163,7 @@ describe('PaymentService', () => {
       expect(result.data.payment_status).toBe('paid');
       expect(mockPaymentRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ payment_status: 'paid' }),
+        expect.anything(),
       );
       expect(mockOrderRepository.update).toHaveBeenCalledWith(
         ORDER_ID,
@@ -224,6 +226,7 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
       mockPaymentRepository.findActiveByOrderId.mockResolvedValue(
         createPaymentRow({ payment_status: 'paid' }),
       );
@@ -250,6 +253,7 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
       mockPaymentRepository.findActiveByOrderId.mockResolvedValue(
         activePayment,
       );
@@ -281,6 +285,7 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
       mockPaymentRepository.findActiveByOrderId.mockResolvedValue(null);
       mockPaymentRepository.create.mockResolvedValue({
         payment_id: PAYMENT_ID,
@@ -328,7 +333,7 @@ describe('PaymentService', () => {
       mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
         createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
       );
-      mockOrderRepository.findById.mockResolvedValue(createOrderRow());
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
 
       const result = await service.handleMidtransWebhook({
         reference_number: orderId,
@@ -361,7 +366,7 @@ describe('PaymentService', () => {
       mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
         createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
       );
-      mockOrderRepository.findById.mockResolvedValue(createOrderRow());
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
 
       const result = await service.handleMidtransWebhook({
         order_id: midtransOrderId,
@@ -386,7 +391,7 @@ describe('PaymentService', () => {
       mockPaymentRepository.findByReferenceNumber.mockResolvedValue(
         createPaymentRow({ payment_status: 'pending', unit_id: UNIT_ID }),
       );
-      mockOrderRepository.findById.mockResolvedValue(
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(
         createOrderRow({ order_status_id: 'processing-status' }),
       );
 
@@ -437,6 +442,7 @@ describe('PaymentService', () => {
         unit_name: 'Unit A',
       });
       mockOrderRepository.findById.mockResolvedValue(createOrderRow());
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(createOrderRow());
       mockPaymentRepository.findById.mockResolvedValue(payment);
       mockPaymentRepository.findByReferenceNumber.mockResolvedValue({
         ...payment,
