@@ -20,6 +20,8 @@ export interface PaymentRow {
   failure_reason: string | null;
   paid_at: Date;
   expired_at: Date;
+  qr_code_url: string | null;
+  qr_string: string | null;
   created_at: Date;
   updated_at: Date;
   deleted_at: Date | null;

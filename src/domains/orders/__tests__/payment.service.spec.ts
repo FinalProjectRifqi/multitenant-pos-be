@@ -43,6 +43,7 @@ const createMockPaymentRepository = (): jest.Mocked<IPaymentRepository> =>
     findByReferenceNumber: jest.fn(),
     create: jest.fn(),
     updateStatus: jest.fn(),
+    updateQrisPayload: jest.fn(),
   }) as unknown as jest.Mocked<IPaymentRepository>;
 
 const createMockLogger = (): jest.Mocked<Logger> =>
@@ -99,6 +100,8 @@ const createPaymentRow = (overrides?: Partial<PaymentRow>): PaymentRow => ({
   failure_reason: null,
   paid_at: new Date(),
   expired_at: new Date(),
+  qr_code_url: null,
+  qr_string: null,
   created_at: new Date(),
   updated_at: new Date(),
   deleted_at: null,
@@ -245,6 +248,49 @@ describe('PaymentService', () => {
       const order = createOrderRow();
       const activePayment = createPaymentRow({
         expired_at: new Date(Date.now() + 5 * 60 * 1000),
+        qr_code_url: 'https://api.midtrans.com/v2/qris/from-db.png',
+        qr_string: 'qr-string-from-db',
+      });
+      const midtransSpy = jest
+        .spyOn(globalThis, 'fetch')
+        .mockRejectedValue(new Error('Midtrans should not be called'));
+
+      mockOrderRepository.findUnitById.mockResolvedValue({
+        unit_id: UNIT_ID,
+        unit_name: 'Unit A',
+      });
+      mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.findByIdForUpdate.mockResolvedValue(order);
+      mockPaymentRepository.findActiveByOrderId.mockResolvedValue(
+        activePayment,
+      );
+
+      const result = await service.createCashlessPayment(
+        UNIT_ID,
+        ORDER_ID,
+        USER_ID,
+        {
+          amount: 55000,
+        },
+      );
+
+      expect(result.statusCode).toBe(201);
+      expect(result.data.payment.payment_id).toBe(PAYMENT_ID);
+      expect(result.data.qr_code_url).toBe(
+        'https://api.midtrans.com/v2/qris/from-db.png',
+      );
+      expect(result.data.qr_string).toBe('qr-string-from-db');
+      expect(mockPaymentRepository.create).not.toHaveBeenCalled();
+      expect(mockPaymentRepository.updateQrisPayload).not.toHaveBeenCalled();
+      expect(midtransSpy).not.toHaveBeenCalled();
+    });
+
+    it('fetches Midtrans status when resumed payment has no local QR data', async () => {
+      const order = createOrderRow();
+      const activePayment = createPaymentRow({
+        expired_at: new Date(Date.now() + 5 * 60 * 1000),
+        qr_code_url: null,
+        qr_string: null,
       });
       fetchSpy();
 
@@ -272,7 +318,13 @@ describe('PaymentService', () => {
       expect(result.data.qr_code_url).toBe(
         'https://api.midtrans.com/v2/qris/img.png',
       );
-      expect(mockPaymentRepository.create).not.toHaveBeenCalled();
+      expect(mockPaymentRepository.updateQrisPayload).toHaveBeenCalledWith(
+        PAYMENT_ID,
+        {
+          qr_code_url: 'https://api.midtrans.com/v2/qris/img.png',
+          qr_string: 'qr-string-data',
+        },
+      );
     });
 
     it('returns qr_code_url when cashless payment created', async () => {
@@ -305,6 +357,13 @@ describe('PaymentService', () => {
       );
       expect(result.data.qr_string).toBe('qr-string-data');
       expect(result.data.acquirer).toBe('gopay');
+      expect(mockPaymentRepository.updateQrisPayload).toHaveBeenCalledWith(
+        PAYMENT_ID,
+        {
+          qr_code_url: 'https://api.midtrans.com/v2/qris/img.png',
+          qr_string: 'qr-string-data',
+        },
+      );
     });
   });
 

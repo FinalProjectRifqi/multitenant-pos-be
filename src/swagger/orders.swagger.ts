@@ -1332,7 +1332,7 @@ export const ordersSwaggerDoc = {
         tags: ['Orders'],
         summary: 'Buat payment cashless (QRIS Core API)',
         description:
-          'Membuat payment cashless QRIS untuk order yang berstatus "siap". Mengembalikan qr_code_url, qr_string, acquirer, dan webhook_signature_key dari Midtrans Core API. Jika sudah ada payment pending yang belum expired, endpoint ini mengembalikan kembali data payment tersebut beserta QR terbaru dari Midtrans. Membutuhkan permission `payment:process`.',
+          'Membuat payment cashless QRIS untuk order yang berstatus "siap". Mengembalikan qr_code_url, qr_string, acquirer, dan webhook_signature_key dari Midtrans Core API. Jika sudah ada payment pending yang belum expired, endpoint ini akan menggunakan QR yang tersimpan di database dan hanya fallback ke Midtrans jika data QR lokal belum tersedia. Membutuhkan permission `payment:process`.',
         security: bearerSecurity,
         parameters: [unitIdParam, orderIdParam],
         requestBody: {
