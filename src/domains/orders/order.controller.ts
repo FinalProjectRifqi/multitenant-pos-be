@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import type { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import type { ListTransactionHistoryQueryDto } from './dto/list-transaction-history-query.dto';
 import type {
   OrderItemParamsDto,
   OrderUnitParamsDto,
@@ -16,6 +17,16 @@ export class OrderController {
     const result = await this.service.listOrders(
       unitId,
       req.query as unknown as ListOrdersQueryDto,
+    );
+    res.status(200).json(result);
+  }
+
+  async listTransactionHistory(req: Request, res: Response): Promise<void> {
+    const { unitId } = req.params as unknown as OrderUnitParamsDto;
+    const result = await this.service.listTransactionHistory(
+      unitId,
+      req.query as unknown as ListTransactionHistoryQueryDto,
+      req.user!,
     );
     res.status(200).json(result);
   }
