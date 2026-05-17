@@ -8,6 +8,8 @@ import { validateRequest } from '../../common/middlewares/validate-request';
 import { InventarisController } from './inventaris.controller';
 import { InventarisService } from './inventaris.service';
 import {
+  InventarisDailyPlanParamsDto,
+  InventarisDailyRealizationParamsDto,
   InventarisBusinessIdParamsDto,
   InventarisItemParamsDto,
 } from './dto/inventaris-params.dto';
@@ -16,6 +18,19 @@ import { CreateInventarisItemDto } from './dto/create-inventaris-item.dto';
 import { UpdateInventarisItemDto } from './dto/update-inventaris-item.dto';
 import { ListInventoryTransactionsQueryDto } from './dto/list-inventory-transactions-query.dto';
 import { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
+import {
+  CreateDailyInventoryPlanDto,
+  ListDailyInventoryPlanQueryDto,
+  UpdateDailyInventoryPlanDto,
+} from './dto/daily-inventory-plan.dto';
+import {
+  CreateDailyInventoryRealizationDto,
+  ListDailyInventoryRealizationQueryDto,
+} from './dto/daily-inventory-realization.dto';
+import {
+  DailyUsageReportQueryDto,
+  VarianceReportQueryDto,
+} from './dto/inventory-report-query.dto';
 import { InventarisRepository } from './repositories/inventaris.repository';
 
 interface InventarisRouterDeps {
@@ -35,6 +50,76 @@ export const buildInventarisRouter = ({
   const repository = new InventarisRepository(knex);
   const service = new InventarisService(repository, logger);
   const controller = new InventarisController(service);
+
+  router.post(
+    '/:businessId/daily-plans',
+    requirePermission(['inventory:read', 'inventory:create']),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(CreateDailyInventoryPlanDto),
+    asyncHandler((req, res) => controller.createDailyPlan(req, res)),
+  );
+
+  router.get(
+    '/:businessId/daily-plans',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(ListDailyInventoryPlanQueryDto, 'query'),
+    asyncHandler((req, res) => controller.listDailyPlans(req, res)),
+  );
+
+  router.patch(
+    '/:businessId/daily-plans/:dailyPlanId',
+    requirePermission(['inventory:read', 'inventory:update']),
+    validateRequest(InventarisDailyPlanParamsDto, 'params'),
+    validateRequest(UpdateDailyInventoryPlanDto),
+    asyncHandler((req, res) => controller.updateDailyPlan(req, res)),
+  );
+
+  router.delete(
+    '/:businessId/daily-plans/:dailyPlanId',
+    requirePermission(['inventory:read', 'inventory:delete']),
+    validateRequest(InventarisDailyPlanParamsDto, 'params'),
+    asyncHandler((req, res) => controller.deleteDailyPlan(req, res)),
+  );
+
+  router.post(
+    '/:businessId/daily-realizations',
+    requirePermission(['inventory:read', 'inventory:create']),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(CreateDailyInventoryRealizationDto),
+    asyncHandler((req, res) => controller.submitDailyRealization(req, res)),
+  );
+
+  router.get(
+    '/:businessId/daily-realizations',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(ListDailyInventoryRealizationQueryDto, 'query'),
+    asyncHandler((req, res) => controller.listDailyRealizations(req, res)),
+  );
+
+  router.get(
+    '/:businessId/daily-realizations/:dailyRealizationId',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisDailyRealizationParamsDto, 'params'),
+    asyncHandler((req, res) => controller.getDailyRealizationById(req, res)),
+  );
+
+  router.get(
+    '/:businessId/reports/daily-usage',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(DailyUsageReportQueryDto, 'query'),
+    asyncHandler((req, res) => controller.getDailyUsageReport(req, res)),
+  );
+
+  router.get(
+    '/:businessId/reports/variance',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisBusinessIdParamsDto, 'params'),
+    validateRequest(VarianceReportQueryDto, 'query'),
+    asyncHandler((req, res) => controller.getVarianceReport(req, res)),
+  );
 
   router.get(
     '/:businessId/items',

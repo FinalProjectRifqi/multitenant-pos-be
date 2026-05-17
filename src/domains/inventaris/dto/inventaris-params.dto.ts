@@ -12,3 +12,19 @@ export class InventarisItemParamsDto {
   @IsUUID('4', { message: 'inventoryItemId harus berupa UUID yang valid' })
   inventoryItemId!: string;
 }
+
+export class InventarisDailyPlanParamsDto {
+  @IsUUID('4', { message: 'businessId harus berupa UUID yang valid' })
+  businessId!: string;
+
+  @IsUUID('4', { message: 'dailyPlanId harus berupa UUID yang valid' })
+  dailyPlanId!: string;
+}
+
+export class InventarisDailyRealizationParamsDto {
+  @IsUUID('4', { message: 'businessId harus berupa UUID yang valid' })
+  businessId!: string;
+
+  @IsUUID('4', { message: 'dailyRealizationId harus berupa UUID yang valid' })
+  dailyRealizationId!: string;
+}

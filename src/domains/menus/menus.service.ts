@@ -44,7 +44,8 @@ export class MenuService {
     try {
       const page = query.page ?? 1;
       const limit = query.limit ?? 10;
-      const sortBy = (query.sortBy as MenuSortByColumn | undefined) ?? 'menu_name';
+      const sortBy =
+        (query.sortBy as MenuSortByColumn | undefined) ?? 'menu_name';
       const sortType = query.sortType ?? 'ASC';
       const search =
         query.search && query.search.trim().length > 0
@@ -108,16 +109,16 @@ export class MenuService {
 
       const unit = await this.repository.findUnitById(businessId);
       if (!unit) {
-        this.logger.warn(
-          { businessId },
-          'Menu stats failed - unit not found',
-        );
+        this.logger.warn({ businessId }, 'Menu stats failed - unit not found');
         throw unitNotFoundError();
       }
 
       const stats = await this.repository.getStats(businessId);
 
-      this.logger.info({ businessId, stats }, 'Menu stats fetched successfully');
+      this.logger.info(
+        { businessId, stats },
+        'Menu stats fetched successfully',
+      );
 
       return {
         success: true,
@@ -152,7 +153,10 @@ export class MenuService {
 
       const unit = await this.repository.findUnitById(businessId);
       if (!unit) {
-        this.logger.warn({ businessId }, 'Menu creation failed - unit not found');
+        this.logger.warn(
+          { businessId },
+          'Menu creation failed - unit not found',
+        );
         throw unitNotFoundError();
       }
 
@@ -231,9 +235,7 @@ export class MenuService {
         throw dbError;
       }
 
-      const signedUrl = blobId
-        ? await this.getSignedUrlSafe(blobId)
-        : null;
+      const signedUrl = blobId ? await this.getSignedUrlSafe(blobId) : null;
 
       const row = await this.repository.findById(businessId, menuItemId);
 
