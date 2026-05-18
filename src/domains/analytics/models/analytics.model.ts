@@ -1,7 +1,14 @@
 export interface AnalyticsScope {
   unitIds?: string[];
-  startDate?: string;
-  endDate?: string;
+  startDate: string;
+  endDate: string;
+  period?: 'daily' | 'weekly' | 'monthly';
+}
+
+export interface AnalyticsUnitRow {
+  unit_id: string;
+  unit_name: string;
+  unit_address: string | null;
 }
 
 export interface AnalyticsMetricSummary {
@@ -13,7 +20,7 @@ export interface AnalyticsMetricSummary {
 }
 
 export interface AnalyticsStatusRow {
-  status_code: string;
+  status_code: 'COMPLETED' | 'CANCELLED' | 'PENDING';
   status_name: string;
   total_transactions: number;
 }
@@ -21,6 +28,8 @@ export interface AnalyticsStatusRow {
 export interface AnalyticsMenuRow {
   menu_item_id: string;
   menu_item_name: string;
+  unit_id?: string;
+  unit_name?: string;
   quantity_sold: number;
   gross_revenue: number;
 }
@@ -31,6 +40,8 @@ export interface AnalyticsUnitRevenueRow {
   total_revenue: number;
   total_transactions: number;
   average_order_value: number;
+  completed_transactions: number;
+  cancelled_transactions: number;
 }
 
 export interface AnalyticsCriticalStockUnitRow {
@@ -54,6 +65,7 @@ export interface AnalyticsPaymentHistoryRow {
   unit_name: string;
   reference_number: string;
   amount: number;
+  payment_method: string;
   payment_status: string;
   paid_at: Date | null;
   created_at: Date;
@@ -83,6 +95,14 @@ export interface AnalyticsDailyUsageRow {
   usage_unit: string;
 }
 
+export interface AnalyticsInventoryPerformanceRow {
+  unit_id: string;
+  unit_name: string;
+  actual_usage_qty: number;
+  waste_qty: number;
+  variance_qty: number;
+}
+
 export interface AnalyticsSummaryData {
   metrics: AnalyticsMetricSummary;
   status_transactions: AnalyticsStatusRow[];
@@ -98,9 +118,9 @@ export interface AnalyticsSummaryData {
   waste_and_variance: AnalyticsDailyUsageRow[];
 }
 
-export interface AnalyticsSummaryResponse {
+export interface AnalyticsReportResponse<TData> {
   success: true;
   statusCode: 200;
   message: string;
-  data: AnalyticsSummaryData;
+  data: TData;
 }

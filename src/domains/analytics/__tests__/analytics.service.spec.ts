@@ -2,7 +2,6 @@ import type { Logger } from 'pino';
 import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
 import type { JwtTokenPayload } from '../../auth/models/auth.model';
 import { AnalyticsService } from '../analytics.service';
-import type { AnalyticsSummaryData } from '../models/analytics.model';
 import type { IAnalyticsRepository } from '../repositories/analytics.repository';
 
 const UNIT_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -25,7 +24,9 @@ const createRepository = (): jest.Mocked<IAnalyticsRepository> =>
     getTopMenus: jest.fn(),
     getRevenueByMenu: jest.fn(),
     getRevenueByUnit: jest.fn(),
+    getTopMenusByUnit: jest.fn(),
     getCriticalStockUnits: jest.fn(),
+    getInventoryPerformanceByUnit: jest.fn(),
     getPaymentSummary: jest.fn(),
     getPaymentHistory: jest.fn(),
     getLowStockItems: jest.fn(),
@@ -44,25 +45,10 @@ const createUser = (overrides?: Partial<JwtTokenPayload>): JwtTokenPayload => ({
   ...overrides,
 });
 
-const createEmptySummaryData = (): AnalyticsSummaryData => ({
-  metrics: {
-    total_revenue: 0,
-    total_transactions: 0,
-    average_order_value: 0,
-    completed_transactions: 0,
-    cancelled_transactions: 0,
-  },
-  status_transactions: [],
-  top_menus: [],
-  revenue_by_menu: [],
-  revenue_by_unit: [],
-  unit_comparison: [],
-  critical_stock_units: [],
-  payment_summary: [],
-  payment_history: [],
-  low_stock_items: [],
-  daily_inventory_usage: [],
-  waste_and_variance: [],
+const createQuery = () => ({
+  startDate: '2026-05-01',
+  endDate: '2026-05-17',
+  period: 'daily' as const,
 });
 
 describe('AnalyticsService', () => {
@@ -72,58 +58,108 @@ describe('AnalyticsService', () => {
   beforeEach(() => {
     repository = createRepository();
     service = new AnalyticsService(repository, createMockLogger());
-    repository.findUnitById.mockResolvedValue({ unit_id: UNIT_ID });
-    repository.getMetrics.mockResolvedValue(createEmptySummaryData().metrics);
-    repository.getStatusTransactions.mockResolvedValue([]);
+    repository.findUnitById.mockResolvedValue({
+      unit_id: UNIT_ID,
+      unit_name: 'Central Kitchen',
+      unit_address: 'Jakarta',
+    });
+    repository.getMetrics.mockResolvedValue({
+      total_revenue: 1_000_000,
+      total_transactions: 12,
+      average_order_value: 250_000,
+      completed_transactions: 4,
+      cancelled_transactions: 2,
+    });
+    repository.getStatusTransactions.mockResolvedValue([
+      {
+        status_code: 'COMPLETED',
+        status_name: 'Completed',
+        total_transactions: 4,
+      },
+      {
+        status_code: 'CANCELLED',
+        status_name: 'Cancelled',
+        total_transactions: 2,
+      },
+      { status_code: 'PENDING', status_name: 'Pending', total_transactions: 6 },
+    ]);
     repository.getTopMenus.mockResolvedValue([]);
     repository.getRevenueByMenu.mockResolvedValue([]);
     repository.getRevenueByUnit.mockResolvedValue([]);
+    repository.getTopMenusByUnit.mockResolvedValue([]);
     repository.getCriticalStockUnits.mockResolvedValue([]);
+    repository.getInventoryPerformanceByUnit.mockResolvedValue([]);
     repository.getPaymentSummary.mockResolvedValue([]);
     repository.getPaymentHistory.mockResolvedValue([]);
     repository.getLowStockItems.mockResolvedValue([]);
     repository.getDailyInventoryUsage.mockResolvedValue([]);
   });
 
-  it('allows group role to see group summary without unit scope', async () => {
+  it('allows group management to see group summary with optional unit filter', async () => {
     const result = await service.getGroupSummary(
-      createUser({ roles: 'GROUP_MANAGER', units: [] }),
-      {},
+      createUser({ roles: 'GROUP_MANAGEMENT', units: [] }),
+      { ...createQuery(), unitIds: [UNIT_ID] },
     );
-
-    expect(result.statusCode).toBe(200);
-    expect(repository.getMetrics).toHaveBeenCalledWith({});
-  });
-
-  it('blocks unit manager from group summary', async () => {
-    await expect(
-      service.getGroupSummary(createUser(), {}),
-    ).rejects.toMatchObject({
-      code: DomainErrorCodes.AuthForbidden,
-    });
-  });
-
-  it('allows unit manager to see assigned unit summary', async () => {
-    const result = await service.getUnitSummary(createUser(), UNIT_ID, {
-      startDate: '2026-05-01',
-      endDate: '2026-05-17',
-    });
 
     expect(result.statusCode).toBe(200);
     expect(repository.getMetrics).toHaveBeenCalledWith({
       unitIds: [UNIT_ID],
       startDate: '2026-05-01',
       endDate: '2026-05-17',
+      period: 'daily',
     });
   });
 
-  it('blocks unit manager from another unit summary', async () => {
-    repository.findUnitById.mockResolvedValue({ unit_id: OTHER_UNIT_ID });
-
+  it('blocks unit manager from group summary', async () => {
     await expect(
-      service.getUnitSummary(createUser(), OTHER_UNIT_ID, {}),
+      service.getGroupSummary(createUser(), createQuery()),
     ).rejects.toMatchObject({
       code: DomainErrorCodes.AuthForbidden,
     });
+  });
+
+  it('allows unit manager to see an assigned unit report', async () => {
+    const result = await service.getUnitManagerReport(createUser(), {
+      ...createQuery(),
+      unitId: UNIT_ID,
+    });
+
+    expect(result.statusCode).toBe(200);
+    expect(result.data.totalRevenue).toBe(1_000_000);
+    expect(result.data.transactionStatus).toEqual({
+      completed: 4,
+      cancelled: 2,
+      pending: 6,
+    });
+    expect(repository.getMetrics).toHaveBeenCalledWith({
+      unitIds: [UNIT_ID],
+      startDate: '2026-05-01',
+      endDate: '2026-05-17',
+      period: 'daily',
+    });
+  });
+
+  it('blocks unit manager from another unit report', async () => {
+    await expect(
+      service.getUnitManagerReport(createUser(), {
+        ...createQuery(),
+        unitId: OTHER_UNIT_ID,
+      }),
+    ).rejects.toMatchObject({
+      code: DomainErrorCodes.AuthForbidden,
+    });
+  });
+
+  it('rejects invalid date range before querying analytics data', async () => {
+    await expect(
+      service.getUnitManagerReport(createUser(), {
+        startDate: '2026-05-18',
+        endDate: '2026-05-01',
+      }),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
+
+    expect(repository.getMetrics).not.toHaveBeenCalled();
   });
 });
