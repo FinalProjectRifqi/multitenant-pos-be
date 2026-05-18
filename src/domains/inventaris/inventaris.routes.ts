@@ -67,6 +67,13 @@ export const buildInventarisRouter = ({
     asyncHandler((req, res) => controller.listDailyPlans(req, res)),
   );
 
+  router.get(
+    '/:businessId/daily-plans/:dailyPlanId',
+    requirePermission('inventory:read'),
+    validateRequest(InventarisDailyPlanParamsDto, 'params'),
+    asyncHandler((req, res) => controller.getDailyPlanById(req, res)),
+  );
+
   router.patch(
     '/:businessId/daily-plans/:dailyPlanId',
     requirePermission(['inventory:read', 'inventory:update']),

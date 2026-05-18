@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -19,7 +20,7 @@ export class CreateDailyInventoryRealizationDto {
 
   @Type(() => Number)
   @IsInt({ message: 'actual_usage_qty harus berupa bilangan bulat' })
-  @Min(0, { message: 'actual_usage_qty tidak boleh negatif' })
+  @Min(1, { message: 'actual_usage_qty minimal bernilai 1' })
   actual_usage_qty!: number;
 
   @IsOptional()
@@ -48,4 +49,17 @@ export class ListDailyInventoryRealizationQueryDto {
   @IsOptional()
   @IsDateString({}, { message: 'date harus menggunakan format YYYY-MM-DD' })
   date?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page harus berupa bilangan bulat' })
+  @Min(1, { message: 'page minimal bernilai 1' })
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'limit harus berupa bilangan bulat' })
+  @Min(1, { message: 'limit minimal bernilai 1' })
+  @Max(100, { message: 'limit maksimal bernilai 100' })
+  limit?: number;
 }

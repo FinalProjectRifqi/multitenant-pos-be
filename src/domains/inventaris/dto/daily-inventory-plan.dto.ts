@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -19,7 +20,7 @@ export class CreateDailyInventoryPlanDto {
 
   @Type(() => Number)
   @IsInt({ message: 'planned_usage_qty harus berupa bilangan bulat' })
-  @Min(0, { message: 'planned_usage_qty tidak boleh negatif' })
+  @Min(1, { message: 'planned_usage_qty minimal bernilai 1' })
   planned_usage_qty!: number;
 
   @IsString()
@@ -44,7 +45,7 @@ export class UpdateDailyInventoryPlanDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'planned_usage_qty harus berupa bilangan bulat' })
-  @Min(0, { message: 'planned_usage_qty tidak boleh negatif' })
+  @Min(1, { message: 'planned_usage_qty minimal bernilai 1' })
   planned_usage_qty?: number;
 
   @IsOptional()
@@ -70,4 +71,17 @@ export class ListDailyInventoryPlanQueryDto {
   @IsOptional()
   @IsDateString({}, { message: 'date harus menggunakan format YYYY-MM-DD' })
   date?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'page harus berupa bilangan bulat' })
+  @Min(1, { message: 'page minimal bernilai 1' })
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'limit harus berupa bilangan bulat' })
+  @Min(1, { message: 'limit minimal bernilai 1' })
+  @Max(100, { message: 'limit maksimal bernilai 100' })
+  limit?: number;
 }

@@ -116,10 +116,24 @@ export class InventarisController {
   }
 
   async updateDailyPlan(req: Request, res: Response): Promise<void> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw authTokenInvalidError();
+    }
+
     const result = await this.service.updateDailyPlan(
       req.params.businessId,
       req.params.dailyPlanId,
+      userId,
       req.body as UpdateDailyInventoryPlanDto,
+    );
+    res.status(result.statusCode).json(result);
+  }
+
+  async getDailyPlanById(req: Request, res: Response): Promise<void> {
+    const result = await this.service.getDailyPlanById(
+      req.params.businessId,
+      req.params.dailyPlanId,
     );
     res.status(result.statusCode).json(result);
   }

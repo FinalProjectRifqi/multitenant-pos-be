@@ -17,7 +17,6 @@ import type { ListInventoryTransactionsQueryDto } from './dto/list-inventory-tra
 import type { UpdateInventarisItemDto } from './dto/update-inventaris-item.dto';
 import {
   dailyInventoryPlanAlreadyRealizedError,
-  dailyInventoryPlanConflictError,
   dailyInventoryPlanNotFoundError,
   dailyInventoryRealizationNotFoundError,
   inventoryItemConflictError,
@@ -409,19 +408,6 @@ export class InventarisService {
         dto.unit,
       );
 
-      const existing = await this.repository.findDailyPlanByDateAndItem(
-        businessId,
-        dto.date,
-        dto.inventory_item_id,
-      );
-      if (existing) {
-        throw dailyInventoryPlanConflictError({
-          businessId,
-          date: dto.date,
-          inventory_item_id: dto.inventory_item_id,
-        });
-      }
-
       const data = await this.repository.createDailyPlan({
         businessId,
         date: dto.date,
@@ -465,13 +451,26 @@ export class InventarisService {
   ): Promise<DailyInventoryPlanListResponse> {
     try {
       await this.assertUnitExists(businessId);
-      const data = await this.repository.findDailyPlans(businessId, query.date);
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 100;
+      const { data, total } = await this.repository.findDailyPlans({
+        businessId,
+        date: query.date,
+        page,
+        limit,
+      });
 
       return {
         success: true,
         statusCode: 200,
         message: 'Daftar rencana inventaris harian berhasil dimuat',
         data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -487,9 +486,44 @@ export class InventarisService {
     }
   }
 
+  async getDailyPlanById(
+    businessId: string,
+    dailyPlanId: string,
+  ): Promise<DailyInventoryPlanDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const data = await this.repository.findDailyPlanById(
+        businessId,
+        dailyPlanId,
+      );
+      if (!data) {
+        throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Detail rencana inventaris harian berhasil dimuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, dailyPlanId },
+        'Unexpected error while getting daily inventory plan',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
   async updateDailyPlan(
     businessId: string,
     dailyPlanId: string,
+    userId: string,
     dto: UpdateDailyInventoryPlanDto,
   ): Promise<DailyInventoryPlanDetailResponse> {
     try {
@@ -526,7 +560,10 @@ export class InventarisService {
       const data = await this.repository.updateDailyPlan(
         businessId,
         dailyPlanId,
-        dto,
+        {
+          ...dto,
+          updated_by: userId,
+        },
       );
       if (!data) {
         throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
@@ -541,7 +578,7 @@ export class InventarisService {
     } catch (error) {
       if (error instanceof AppError) throw error;
       this.logger.error(
-        { err: error, businessId, dailyPlanId, dto },
+        { err: error, businessId, dailyPlanId, userId, dto },
         'Unexpected error while updating daily inventory plan',
       );
       throw new AppError({
@@ -652,16 +689,26 @@ export class InventarisService {
   ): Promise<DailyInventoryRealizationListResponse> {
     try {
       await this.assertUnitExists(businessId);
-      const data = await this.repository.findDailyRealizations(
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 100;
+      const { data, total } = await this.repository.findDailyRealizations({
         businessId,
-        query.date,
-      );
+        date: query.date,
+        page,
+        limit,
+      });
 
       return {
         success: true,
         statusCode: 200,
         message: 'Daftar realisasi inventaris harian berhasil dimuat',
         data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       };
     } catch (error) {
       if (error instanceof AppError) throw error;

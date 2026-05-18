@@ -10,6 +10,7 @@ import type {
 } from '../models/inventaris.model';
 import {
   dailyInventoryPlanAlreadyRealizedError,
+  dailyInventoryPlanConflictError,
   dailyInventoryRealizationConflictError,
   inventoryInsufficientStockError,
 } from '../errors/inventaris.errors';
@@ -36,6 +37,20 @@ export interface ListInventoryTransactionsParams {
   limit: number;
   inventory_item_id?: string;
   transaction_type?: InventoryTransactionType;
+}
+
+export interface ListDailyInventoryPlansParams {
+  businessId: string;
+  date?: string;
+  page: number;
+  limit: number;
+}
+
+export interface ListDailyInventoryRealizationsParams {
+  businessId: string;
+  date?: string;
+  page: number;
+  limit: number;
 }
 
 export type InventoryTransactionType =
@@ -90,6 +105,7 @@ export interface UpdateDailyInventoryPlanData {
   planned_usage_qty?: number;
   unit?: string;
   notes?: string;
+  updated_by: string;
 }
 
 export interface CreateDailyInventoryRealizationData {
@@ -132,9 +148,8 @@ export interface IInventarisRepository {
     data: CreateInventoryTransactionData,
   ): Promise<InventoryTransaction | null>;
   findDailyPlans(
-    businessId: string,
-    date?: string,
-  ): Promise<DailyInventoryPlan[]>;
+    params: ListDailyInventoryPlansParams,
+  ): Promise<{ data: DailyInventoryPlan[]; total: number }>;
   findDailyPlanById(
     businessId: string,
     dailyPlanId: string,
@@ -158,9 +173,8 @@ export interface IInventarisRepository {
   ): Promise<DailyInventoryPlan | null>;
   deleteDailyPlan(businessId: string, dailyPlanId: string): Promise<boolean>;
   findDailyRealizations(
-    businessId: string,
-    date?: string,
-  ): Promise<DailyInventoryRealization[]>;
+    params: ListDailyInventoryRealizationsParams,
+  ): Promise<{ data: DailyInventoryRealization[]; total: number }>;
   findDailyRealizationById(
     businessId: string,
     dailyRealizationId: string,
@@ -235,6 +249,12 @@ const DAILY_REALIZATION_SELECT_COLUMNS = [
   'dir.created_at',
   'dir.updated_at',
 ];
+
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: unknown }).code === '23505';
 
 export class InventarisRepository implements IInventarisRepository {
   constructor(private readonly db: Knex) {}
@@ -792,25 +812,45 @@ export class InventarisRepository implements IInventarisRepository {
   }
 
   async findDailyPlans(
-    businessId: string,
-    date?: string,
-  ): Promise<DailyInventoryPlan[]> {
-    const query = this.db('daily_inventory_plans as dip')
-      .innerJoin('inventory_items as ii', function () {
-        this.on('dip.inventory_item_id', '=', 'ii.inventory_item_id').andOnNull(
-          'ii.deleted_at',
-        );
-      })
-      .select(DAILY_PLAN_SELECT_COLUMNS)
-      .where('dip.unit_id', businessId)
-      .orderBy('dip.date', 'DESC')
-      .orderBy('ii.inventory_item_name', 'ASC');
+    params: ListDailyInventoryPlansParams,
+  ): Promise<{ data: DailyInventoryPlan[]; total: number }> {
+    const { businessId, date, page, limit } = params;
+    const offset = (page - 1) * limit;
 
-    if (date) {
-      query.andWhere('dip.date', date);
-    }
+    const buildBaseQuery = () => {
+      const query = this.db('daily_inventory_plans as dip')
+        .innerJoin('inventory_items as ii', function () {
+          this.on(
+            'dip.inventory_item_id',
+            '=',
+            'ii.inventory_item_id',
+          ).andOnNull('ii.deleted_at');
+        })
+        .where('dip.unit_id', businessId);
 
-    return (await query) as DailyInventoryPlan[];
+      if (date) {
+        query.andWhere('dip.date', date);
+      }
+
+      return query;
+    };
+
+    const [rows, countResult] = await Promise.all([
+      buildBaseQuery()
+        .select(DAILY_PLAN_SELECT_COLUMNS)
+        .orderBy('dip.date', 'DESC')
+        .orderBy('ii.inventory_item_name', 'ASC')
+        .offset(offset)
+        .limit(limit),
+      buildBaseQuery()
+        .countDistinct('dip.daily_inventory_plan_id as count')
+        .first<{ count: string | number }>(),
+    ]);
+
+    return {
+      data: rows as DailyInventoryPlan[],
+      total: Number(countResult?.count ?? 0),
+    };
   }
 
   async findDailyPlanById(
@@ -872,57 +912,83 @@ export class InventarisRepository implements IInventarisRepository {
   async createDailyPlan(
     data: CreateDailyInventoryPlanData,
   ): Promise<DailyInventoryPlan | null> {
-    return this.db.transaction(async (trx) => {
-      const item = await trx('inventory_items as ii')
-        .innerJoin('inventory_items_units as iiu', function () {
-          this.on(
-            'ii.inventory_item_id',
-            '=',
-            'iiu.inventory_item_id',
-          ).andOnNull('iiu.deleted_at');
-        })
-        .select(['ii.inventory_item_id', 'ii.inventory_item_name'])
-        .where('iiu.unit_id', data.businessId)
-        .where('ii.inventory_item_id', data.inventory_item_id)
-        .whereNull('ii.deleted_at')
-        .first<
-          | {
-              inventory_item_id: string;
-              inventory_item_name: string;
-            }
-          | undefined
-        >();
+    try {
+      return await this.db.transaction(async (trx) => {
+        const item = await trx('inventory_items as ii')
+          .innerJoin('inventory_items_units as iiu', function () {
+            this.on(
+              'ii.inventory_item_id',
+              '=',
+              'iiu.inventory_item_id',
+            ).andOnNull('iiu.deleted_at');
+          })
+          .select(['ii.inventory_item_id', 'ii.inventory_item_name'])
+          .where('iiu.unit_id', data.businessId)
+          .where('ii.inventory_item_id', data.inventory_item_id)
+          .whereNull('ii.deleted_at')
+          .forUpdate()
+          .first<
+            | {
+                inventory_item_id: string;
+                inventory_item_name: string;
+              }
+            | undefined
+          >();
 
-      if (!item) return null;
+        if (!item) return null;
 
-      const [created] = await trx('daily_inventory_plans')
-        .insert({
-          unit_id: data.businessId,
+        const existing = await trx('daily_inventory_plans')
+          .where('unit_id', data.businessId)
+          .where('date', data.date)
+          .where('inventory_item_id', data.inventory_item_id)
+          .first();
+
+        if (existing) {
+          throw dailyInventoryPlanConflictError({
+            businessId: data.businessId,
+            date: data.date,
+            inventory_item_id: data.inventory_item_id,
+          });
+        }
+
+        const [created] = await trx('daily_inventory_plans')
+          .insert({
+            unit_id: data.businessId,
+            date: data.date,
+            inventory_item_id: data.inventory_item_id,
+            planned_usage_qty: data.planned_usage_qty,
+            unit: data.unit,
+            notes: data.notes ?? null,
+            created_by: data.created_by,
+          })
+          .returning([
+            'daily_inventory_plan_id',
+            'unit_id',
+            'date',
+            'inventory_item_id',
+            'planned_usage_qty',
+            'unit',
+            'notes',
+            'created_by',
+            'created_at',
+            'updated_at',
+          ]);
+
+        return {
+          ...(created as Omit<DailyInventoryPlan, 'inventory_item_name'>),
+          inventory_item_name: item.inventory_item_name,
+        };
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw dailyInventoryPlanConflictError({
+          businessId: data.businessId,
           date: data.date,
           inventory_item_id: data.inventory_item_id,
-          planned_usage_qty: data.planned_usage_qty,
-          unit: data.unit,
-          notes: data.notes ?? null,
-          created_by: data.created_by,
-        })
-        .returning([
-          'daily_inventory_plan_id',
-          'unit_id',
-          'date',
-          'inventory_item_id',
-          'planned_usage_qty',
-          'unit',
-          'notes',
-          'created_by',
-          'created_at',
-          'updated_at',
-        ]);
-
-      return {
-        ...(created as Omit<DailyInventoryPlan, 'inventory_item_name'>),
-        inventory_item_name: item.inventory_item_name,
-      };
-    });
+        });
+      }
+      throw error;
+    }
   }
 
   async updateDailyPlan(
@@ -930,26 +996,62 @@ export class InventarisRepository implements IInventarisRepository {
     dailyPlanId: string,
     data: UpdateDailyInventoryPlanData,
   ): Promise<DailyInventoryPlan | null> {
-    const patchPayload: Record<string, unknown> = {
-      updated_at: this.db.fn.now(),
-    };
+    return this.db.transaction(async (trx) => {
+      const current = await trx('daily_inventory_plans')
+        .select('daily_inventory_plan_id')
+        .where('unit_id', businessId)
+        .where('daily_inventory_plan_id', dailyPlanId)
+        .forUpdate()
+        .first<{ daily_inventory_plan_id: string } | undefined>();
 
-    if (data.planned_usage_qty !== undefined) {
-      patchPayload.planned_usage_qty = data.planned_usage_qty;
-    }
-    if (data.unit !== undefined) {
-      patchPayload.unit = data.unit;
-    }
-    if (data.notes !== undefined) {
-      patchPayload.notes = data.notes;
-    }
+      if (!current) return null;
 
-    await this.db('daily_inventory_plans')
-      .where('unit_id', businessId)
-      .where('daily_inventory_plan_id', dailyPlanId)
-      .update(patchPayload);
+      const realization = await trx('daily_inventory_realizations')
+        .where('unit_id', businessId)
+        .where('daily_inventory_plan_id', dailyPlanId)
+        .first();
 
-    return this.findDailyPlanById(businessId, dailyPlanId);
+      if (realization) {
+        throw dailyInventoryPlanAlreadyRealizedError({
+          businessId,
+          dailyPlanId,
+        });
+      }
+
+      const patchPayload: Record<string, unknown> = {
+        updated_at: trx.fn.now(),
+      };
+
+      if (data.planned_usage_qty !== undefined) {
+        patchPayload.planned_usage_qty = data.planned_usage_qty;
+      }
+      if (data.unit !== undefined) {
+        patchPayload.unit = data.unit;
+      }
+      if (data.notes !== undefined) {
+        patchPayload.notes = data.notes;
+      }
+
+      await trx('daily_inventory_plans')
+        .where('unit_id', businessId)
+        .where('daily_inventory_plan_id', dailyPlanId)
+        .update(patchPayload);
+
+      const row = await trx('daily_inventory_plans as dip')
+        .innerJoin('inventory_items as ii', function () {
+          this.on(
+            'dip.inventory_item_id',
+            '=',
+            'ii.inventory_item_id',
+          ).andOnNull('ii.deleted_at');
+        })
+        .select(DAILY_PLAN_SELECT_COLUMNS)
+        .where('dip.unit_id', businessId)
+        .where('dip.daily_inventory_plan_id', dailyPlanId)
+        .first<DailyInventoryPlan | undefined>();
+
+      return row ?? null;
+    });
   }
 
   async deleteDailyPlan(
@@ -976,25 +1078,45 @@ export class InventarisRepository implements IInventarisRepository {
   }
 
   async findDailyRealizations(
-    businessId: string,
-    date?: string,
-  ): Promise<DailyInventoryRealization[]> {
-    const query = this.db('daily_inventory_realizations as dir')
-      .innerJoin('inventory_items as ii', function () {
-        this.on('dir.inventory_item_id', '=', 'ii.inventory_item_id').andOnNull(
-          'ii.deleted_at',
-        );
-      })
-      .select(DAILY_REALIZATION_SELECT_COLUMNS)
-      .where('dir.unit_id', businessId)
-      .orderBy('dir.date', 'DESC')
-      .orderBy('ii.inventory_item_name', 'ASC');
+    params: ListDailyInventoryRealizationsParams,
+  ): Promise<{ data: DailyInventoryRealization[]; total: number }> {
+    const { businessId, date, page, limit } = params;
+    const offset = (page - 1) * limit;
 
-    if (date) {
-      query.andWhere('dir.date', date);
-    }
+    const buildBaseQuery = () => {
+      const query = this.db('daily_inventory_realizations as dir')
+        .innerJoin('inventory_items as ii', function () {
+          this.on(
+            'dir.inventory_item_id',
+            '=',
+            'ii.inventory_item_id',
+          ).andOnNull('ii.deleted_at');
+        })
+        .where('dir.unit_id', businessId);
 
-    return (await query) as DailyInventoryRealization[];
+      if (date) {
+        query.andWhere('dir.date', date);
+      }
+
+      return query;
+    };
+
+    const [rows, countResult] = await Promise.all([
+      buildBaseQuery()
+        .select(DAILY_REALIZATION_SELECT_COLUMNS)
+        .orderBy('dir.date', 'DESC')
+        .orderBy('ii.inventory_item_name', 'ASC')
+        .offset(offset)
+        .limit(limit),
+      buildBaseQuery()
+        .countDistinct('dir.daily_inventory_realization_id as count')
+        .first<{ count: string | number }>(),
+    ]);
+
+    return {
+      data: rows as DailyInventoryRealization[],
+      total: Number(countResult?.count ?? 0),
+    };
   }
 
   async findDailyRealizationById(
@@ -1087,6 +1209,9 @@ export class InventarisRepository implements IInventarisRepository {
         });
       }
 
+      // Variance dihitung sebagai selisih antara planned usage dengan total aktual usage (actual usage + waste).
+      // Apabila Variance bernilai positif, berarti penggunaan aktual lebih sedikit dari yang direncanakan (under usage).
+      // Apabila Variance bernilai negatif, berarti penggunaan aktual lebih banyak dari yang direncanakan (over usage).
       const varianceQty =
         plan.planned_usage_qty - data.actual_usage_qty - data.waste_qty;
       const endingStock = plan.current_stock - totalDeduction;

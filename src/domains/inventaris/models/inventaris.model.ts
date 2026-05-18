@@ -158,6 +158,7 @@ export interface DailyInventoryPlanListResponse {
   statusCode: number;
   message: string;
   data: DailyInventoryPlan[];
+  meta: PaginationMeta;
 }
 
 export interface DailyInventoryPlanDetailResponse {
@@ -178,6 +179,7 @@ export interface DailyInventoryRealizationListResponse {
   statusCode: number;
   message: string;
   data: DailyInventoryRealization[];
+  meta: PaginationMeta;
 }
 
 export interface DailyInventoryRealizationDetailResponse {
