@@ -69,7 +69,7 @@ const orderListItemSchema = {
       format: 'uuid',
       example: 'a3bb4c2e-f123-4d56-b789-000000000010',
     },
-    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
     customer_name: { type: 'string', example: 'Budi Santoso' },
     table_number: { type: 'string', nullable: true, example: '5' },
     order_type_id: {
@@ -93,6 +93,78 @@ const orderListItemSchema = {
   },
 };
 
+const transactionHistoryItemSchema = {
+  type: 'object',
+  properties: {
+    order_id: {
+      type: 'string',
+      format: 'uuid',
+      example: 'a3bb4c2e-f123-4d56-b789-000000000010',
+    },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
+    business_unit_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440000',
+    },
+    business_unit_name: { type: 'string', nullable: true, example: 'Unit A' },
+    customer_name: { type: 'string', example: 'Budi Santoso' },
+    table_number: { type: 'string', nullable: true, example: '5' },
+    order_type_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440001',
+    },
+    order_type_name: { type: 'string', example: 'Dine-in' },
+    total_amount: { type: 'number', example: 55000 },
+    order_status_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440002',
+    },
+    order_status_name: { type: 'string', example: 'selesai' },
+    ordered_at: {
+      type: 'string',
+      format: 'date-time',
+      example: '2025-01-15T10:30:00.000Z',
+    },
+    completed_at: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      example: '2025-01-15T10:45:00.000Z',
+    },
+    payment: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        payment_id: {
+          type: 'string',
+          format: 'uuid',
+          example: 'f1cc5d3f-a234-4e67-b890-999999999999',
+        },
+        reference_number: {
+          type: 'string',
+          example: 'PAY-ORD-A1B2C3-20250115104500',
+        },
+        payment_status: { type: 'string', example: 'paid' },
+        payment_method: {
+          type: 'string',
+          enum: ['cash', 'cashless'],
+          example: 'cashless',
+        },
+        amount: { type: 'number', example: 55000 },
+        paid_at: {
+          type: 'string',
+          format: 'date-time',
+          nullable: true,
+          example: '2025-01-15T10:45:00.000Z',
+        },
+      },
+    },
+  },
+};
+
 const orderDetailSchema = {
   type: 'object',
   properties: {
@@ -111,7 +183,7 @@ const orderDetailSchema = {
       format: 'uuid',
       example: '660f9511-f3ac-52e5-b827-557766551111',
     },
-    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
     customer_name: { type: 'string', example: 'Budi Santoso' },
     table_number: { type: 'string', nullable: true, example: '5' },
     notes: {
@@ -167,7 +239,7 @@ const paymentResponseSchema = {
     },
     reference_number: {
       type: 'string',
-      example: 'PAY-ORD-20250115-0001-20250115103045',
+      example: 'PAY-ORD-A1B2C3-20250115103045',
     },
     amount: { type: 'number', example: 55000 },
     payment_status: {
@@ -1618,13 +1690,13 @@ export const ordersSwaggerDoc = {
                 properties: {
                   reference_number: {
                     type: 'string',
-                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                    example: 'PAY-ORD-A1B2C3-20250115103045',
                     description:
                       'Opsional jika order_id dikirim. Gunakan nilai `payment.reference_number` dari response create cashless payment.',
                   },
                   order_id: {
                     type: 'string',
-                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                    example: 'PAY-ORD-A1B2C3-20250115103045',
                     description:
                       'Alternatif untuk reference_number. Midtrans Core API biasanya mengirim order_id.',
                   },

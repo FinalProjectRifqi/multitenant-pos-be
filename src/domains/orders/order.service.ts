@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import { randomBytes } from 'node:crypto';
 import type { AppConfig } from '../../config';
 import { AppError } from '../../common/errors/app-error';
 import { ErrorCodes } from '../../common/errors/error-codes';
@@ -49,6 +50,7 @@ import {
 
 // Differences <= 1 rupiah are accepted to handle floating-point rounding
 const PRICE_TOLERANCE = 1;
+const ORDER_NUMBER_RANDOM_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 export class OrderService {
   constructor(
@@ -233,9 +235,8 @@ export class OrderService {
         dto.total_amount,
       );
 
-      // 7. Generate order number: ORD-YYYYMMDD-XXXX
-      const countToday = await this.repository.countOrdersToday(unitId);
-      const orderNumber = this.generateOrderNumber(countToday + 1);
+      // 7. Generate order number: ORD-XXXXXX
+      const orderNumber = this.generateOrderNumber();
 
       this.logger.info({ unitId, orderNumber }, 'Generated order number');
 
@@ -843,16 +844,15 @@ export class OrderService {
   }
 
   /**
-   * Generate order number in format: ORD-YYYYMMDD-XXXX
-   * where XXXX is the sequence number left-padded to 4 digits.
+   * Generate order number in format: ORD-XXXXXX.
    */
-  private generateOrderNumber(sequence: number): string {
-    const now = new Date();
-    const year = now.getUTCFullYear();
-    const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(now.getUTCDate()).padStart(2, '0');
-    const seq = String(sequence).padStart(4, '0');
-    return `ORD-${year}${month}${day}-${seq}`;
+  private generateOrderNumber(): string {
+    const bytes = randomBytes(6);
+    const randomString = Array.from(bytes, (byte) =>
+      ORDER_NUMBER_RANDOM_CHARS.charAt(byte % ORDER_NUMBER_RANDOM_CHARS.length),
+    ).join('');
+
+    return `ORD-${randomString}`;
   }
 
   // ===========================
