@@ -33,7 +33,14 @@ export class ListUsersQueryDto {
 
   @IsOptional()
   @IsIn(
-    ['full_name', 'username', 'business_unit_name', 'role_name', 'status', 'last_login'],
+    [
+      'full_name',
+      'username',
+      'business_unit_name',
+      'role_name',
+      'status',
+      'last_login',
+    ],
     {
       message:
         'sortBy harus salah satu dari: full_name, username, business_unit_name, role_name, status, last_login',
@@ -57,12 +64,4 @@ export class ListUsersQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
-
-  @IsOptional()
-  @IsUUID('4', { message: 'business_unit_id harus berupa UUID yang valid' })
-  business_unit_id?: string;
-
-  @IsOptional()
-  @IsUUID('4', { message: 'role_id harus berupa UUID yang valid' })
-  role_id?: string;
 }
