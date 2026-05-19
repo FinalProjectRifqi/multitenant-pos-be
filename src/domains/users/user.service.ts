@@ -27,8 +27,11 @@ import type {
 } from './models/user.model';
 import type {
   IUserRepository,
+  RoleLookup,
   SortByColumn,
 } from './repositories/user.repository';
+
+const ALL_UNIT_ROLE_CODES = ['group_management'];
 
 export class UserService {
   constructor(
@@ -138,11 +141,14 @@ export class UserService {
         'Creating user',
       );
 
+      const businessUnitId = dto.business_unit_id;
       const [existingUsername, existingEmail, role, unit] = await Promise.all([
         this.repository.findByUsername(dto.user_name),
         this.repository.findByEmail(dto.email),
         this.repository.findRoleById(dto.role_id),
-        this.repository.findUnitById(dto.business_unit_id),
+        businessUnitId
+          ? this.repository.findUnitById(businessUnitId)
+          : Promise.resolve(null),
       ]);
 
       if (existingUsername) {
@@ -169,9 +175,15 @@ export class UserService {
         throw roleNotFoundError();
       }
 
-      if (!unit) {
+      const usesAllUnits = UserService.usesAllUnits(role);
+
+      if (!usesAllUnits && !businessUnitId) {
+        throw UserService.unitRequiredForRoleError();
+      }
+
+      if (!usesAllUnits && businessUnitId && !unit) {
         this.logger.warn(
-          { unitId: dto.business_unit_id },
+          { unitId: businessUnitId },
           'User creation failed - business unit not found',
         );
         throw unitNotFoundForUserError();
@@ -182,18 +194,20 @@ export class UserService {
         this.config.bcryptSaltRounds,
       );
 
-      const { user_id, username } = await this.repository.createWithUnit(
-        {
-          role_id: dto.role_id,
-          full_name: dto.full_name,
-          username: dto.user_name,
-          email: dto.email,
-          password: hashedPassword,
-          is_active: true,
-          must_change_password: true,
-        },
-        dto.business_unit_id,
-      );
+      const createData = {
+        role_id: dto.role_id,
+        full_name: dto.full_name,
+        username: dto.user_name,
+        email: dto.email,
+        password: hashedPassword,
+        is_active: true,
+        must_change_password: true,
+      } as const;
+
+      const { user_id, username } =
+        businessUnitId && !usesAllUnits
+          ? await this.repository.createWithUnit(createData, businessUnitId)
+          : await this.repository.create(createData);
 
       this.logger.info({ userId: user_id }, 'User created successfully');
 
@@ -300,6 +314,8 @@ export class UserService {
       }
 
       const validationPromises: Promise<void>[] = [];
+      const businessUnitId = dto.business_unit_id;
+      let role: RoleLookup | null = null;
 
       if (dto.user_name !== undefined) {
         validationPromises.push(
@@ -321,20 +337,39 @@ export class UserService {
         validationPromises.push(
           this.repository.findRoleById(dto.role_id).then((found) => {
             if (!found) throw roleNotFoundError();
-          }),
-        );
-      }
-
-      if (dto.business_unit_id !== undefined) {
-        validationPromises.push(
-          this.repository.findUnitById(dto.business_unit_id).then((found) => {
-            if (!found) throw unitNotFoundForUserError();
+            role = found;
           }),
         );
       }
 
       if (validationPromises.length > 0) {
         await Promise.all(validationPromises);
+      }
+
+      const targetRole = role ?? {
+        role_id: existing.role_id ?? '',
+        role_code: existing.role_code,
+      };
+      const usesAllUnits = UserService.usesAllUnits(targetRole);
+
+      if (businessUnitId && !usesAllUnits) {
+        const unit = await this.repository.findUnitById(businessUnitId);
+        if (!unit) {
+          throw unitNotFoundForUserError();
+        }
+      }
+
+      if (!usesAllUnits && businessUnitId === null) {
+        throw UserService.unitRequiredForRoleError();
+      }
+
+      if (
+        !usesAllUnits &&
+        dto.role_id !== undefined &&
+        businessUnitId === undefined &&
+        existing.business_units.length === 0
+      ) {
+        throw UserService.unitRequiredForRoleError();
       }
 
       const updateData: {
@@ -356,15 +391,17 @@ export class UserService {
         await this.repository.update(id, updateData);
       }
 
-      if (dto.business_unit_id !== undefined) {
+      if (businessUnitId === null || usesAllUnits) {
+        await this.repository.revokeUserUnits(id);
+      } else if (businessUnitId) {
         const activeUnits = await this.repository.findActiveUserUnits(id);
         const currentUnitIds = activeUnits.map((u) => u.unit_id);
 
-        if (!currentUnitIds.includes(dto.business_unit_id)) {
+        if (!currentUnitIds.includes(businessUnitId)) {
           if (activeUnits.length > 0) {
-            await this.repository.replaceUserUnit(id, dto.business_unit_id);
+            await this.repository.replaceUserUnit(id, businessUnitId);
           } else {
-            await this.repository.createUserUnit(id, dto.business_unit_id);
+            await this.repository.createUserUnit(id, businessUnitId);
           }
         }
       }
@@ -448,6 +485,21 @@ export class UserService {
         status: 500,
       });
     }
+  }
+
+  private static usesAllUnits(role: RoleLookup | null): boolean {
+    const normalizedCode = role?.role_code?.toLowerCase();
+    return normalizedCode
+      ? ALL_UNIT_ROLE_CODES.includes(normalizedCode)
+      : false;
+  }
+
+  private static unitRequiredForRoleError(): AppError {
+    return new AppError({
+      code: ErrorCodes.ValidationFailed,
+      message: 'Unit usaha wajib diisi untuk role selain Manajemen Grup',
+      status: 400,
+    });
   }
 
   private mapToResponse(user: UserWithDetails): UserResponse {

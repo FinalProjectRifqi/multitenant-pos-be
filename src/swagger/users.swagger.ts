@@ -229,7 +229,7 @@ export const usersSwaggerDoc = {
             name: 'business_unit_id',
             in: 'query',
             required: false,
-            description: 'Filter pengguna berdasarkan UUID unit usaha',
+            description: 'Filter pengguna berdasarkan unit usaha',
             schema: {
               type: 'string',
               format: 'uuid',
@@ -240,7 +240,7 @@ export const usersSwaggerDoc = {
             name: 'role_id',
             in: 'query',
             required: false,
-            description: 'Filter pengguna berdasarkan UUID role',
+            description: 'Filter pengguna berdasarkan role',
             schema: {
               type: 'string',
               format: 'uuid',
@@ -341,7 +341,7 @@ export const usersSwaggerDoc = {
         tags: ['Users'],
         summary: 'Buat pengguna baru',
         description:
-          'Membuat pengguna baru dan langsung meng-assign ke unit usaha. Membutuhkan permission `user:read`, `user:create`, dan `unit:assign_user`. Password akan dikembalikan dalam respons (plain text) untuk keperluan internal.',
+          'Membuat pengguna baru. Role selain `GROUP_MANAGEMENT` wajib memiliki `business_unit_id`; role `GROUP_MANAGEMENT` tidak memakai assignment unit. Membutuhkan permission `user:read`, `user:create`, dan `unit:assign_user`. Password akan dikembalikan dalam respons (plain text) untuk keperluan internal.',
         security: bearerSecurity,
         requestBody: {
           required: true,
@@ -386,8 +386,10 @@ export const usersSwaggerDoc = {
                   business_unit_id: {
                     type: 'string',
                     format: 'uuid',
+                    nullable: true,
                     example: '550e8400-e29b-41d4-a716-446655440000',
-                    description: 'UUID unit usaha yang di-assign (wajib)',
+                    description:
+                      'UUID unit usaha yang di-assign. Hanya boleh null untuk role GROUP_MANAGEMENT.',
                   },
                   password: {
                     type: 'string',
@@ -562,7 +564,7 @@ export const usersSwaggerDoc = {
         tags: ['Users'],
         summary: 'Perbarui pengguna (partial)',
         description:
-          'Memperbarui data pengguna secara parsial. Hanya field yang dikirim yang akan diubah. Membutuhkan permission `user:read`, `user:update`, dan `unit:assign_user`. Tidak dapat menonaktifkan akun sendiri.',
+          'Memperbarui data pengguna secara parsial. Role selain `GROUP_MANAGEMENT` wajib memiliki assignment unit. Kirim `business_unit_id: null` hanya untuk role `GROUP_MANAGEMENT` agar assignment unit dihapus. Membutuhkan permission `user:read`, `user:update`, dan `unit:assign_user`. Tidak dapat menonaktifkan akun sendiri.',
         security: bearerSecurity,
         parameters: [
           {
@@ -612,8 +614,10 @@ export const usersSwaggerDoc = {
                   business_unit_id: {
                     type: 'string',
                     format: 'uuid',
+                    nullable: true,
                     example: '550e8400-e29b-41d4-a716-446655440001',
-                    description: 'UUID unit usaha baru (opsional)',
+                    description:
+                      'UUID unit usaha baru (opsional). Isi null hanya untuk role GROUP_MANAGEMENT agar assignment unit dihapus.',
                   },
                   status: {
                     type: 'string',

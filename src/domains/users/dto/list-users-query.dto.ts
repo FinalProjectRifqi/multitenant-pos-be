@@ -57,4 +57,12 @@ export class ListUsersQueryDto {
   @Min(1)
   @Max(100)
   limit?: number;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'business_unit_id harus berupa UUID yang valid' })
+  business_unit_id?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'role_id harus berupa UUID yang valid' })
+  role_id?: string;
 }
