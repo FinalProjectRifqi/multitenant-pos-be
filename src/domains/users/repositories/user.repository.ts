@@ -19,6 +19,8 @@ export interface FindAllUsersParams {
   page: number;
   limit: number;
   search?: string;
+  businessUnitId?: string;
+  roleId?: string;
   sortBy: SortByColumn;
   sortType: 'ASC' | 'DESC';
 }
@@ -94,7 +96,8 @@ export class UserRepository implements IUserRepository {
   async findAll(
     params: FindAllUsersParams,
   ): Promise<{ data: UserWithDetails[]; total: number }> {
-    const { page, limit, search, sortBy, sortType } = params;
+    const { page, limit, search, businessUnitId, roleId, sortBy, sortType } =
+      params;
     const offset = (page - 1) * limit;
 
     const buildBaseQuery = () => {
@@ -111,6 +114,25 @@ export class UserRepository implements IUserRepository {
             .orWhereILike('u.email', `%${search}%`)
             .orWhereILike('r.role_name', `%${search}%`);
         });
+      }
+
+      if (businessUnitId) {
+        query.whereExists(function () {
+          this.select(1)
+            .from('user_units as uu_filter')
+            .join('units as un_filter', function () {
+              this.on('un_filter.unit_id', '=', 'uu_filter.unit_id').andOnNull(
+                'un_filter.deleted_at',
+              );
+            })
+            .whereRaw('uu_filter.user_id = u.user_id')
+            .where('uu_filter.unit_id', businessUnitId)
+            .whereNull('uu_filter.deleted_at');
+        });
+      }
+
+      if (roleId) {
+        query.where('u.role_id', roleId);
       }
 
       return query;

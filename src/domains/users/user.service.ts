@@ -49,9 +49,11 @@ export class UserService {
         query.search && query.search.trim().length > 0
           ? query.search.trim()
           : undefined;
+      const businessUnitId = query.business_unit_id;
+      const roleId = query.role_id;
 
       this.logger.info(
-        { page, limit, search, sortBy, sortType },
+        { page, limit, search, businessUnitId, roleId, sortBy, sortType },
         'Fetching users list',
       );
 
@@ -59,6 +61,8 @@ export class UserService {
         page,
         limit,
         search,
+        businessUnitId,
+        roleId,
         sortBy,
         sortType,
       });
