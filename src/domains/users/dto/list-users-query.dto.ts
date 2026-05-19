@@ -1,5 +1,13 @@
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class ListUsersQueryDto {
   @IsOptional()
@@ -8,6 +16,20 @@ export class ListUsersQueryDto {
     typeof value === 'string' ? value.trim() : value,
   )
   search?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'business_unit_id harus berupa UUID v4' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  business_unit_id?: string;
+
+  @IsOptional()
+  @IsUUID('4', { message: 'role_id harus berupa UUID v4' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  role_id?: string;
 
   @IsOptional()
   @IsIn(

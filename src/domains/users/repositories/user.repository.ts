@@ -19,6 +19,8 @@ export interface FindAllUsersParams {
   page: number;
   limit: number;
   search?: string;
+  businessUnitId?: string;
+  roleId?: string;
   sortBy: SortByColumn;
   sortType: 'ASC' | 'DESC';
 }
@@ -94,7 +96,8 @@ export class UserRepository implements IUserRepository {
   async findAll(
     params: FindAllUsersParams,
   ): Promise<{ data: UserWithDetails[]; total: number }> {
-    const { page, limit, search, sortBy, sortType } = params;
+    const { page, limit, search, businessUnitId, roleId, sortBy, sortType } =
+      params;
     const offset = (page - 1) * limit;
 
     const buildBaseQuery = () => {
@@ -113,6 +116,25 @@ export class UserRepository implements IUserRepository {
         });
       }
 
+      if (businessUnitId) {
+        query.whereExists(function () {
+          this.select(1)
+            .from('user_units as uu_filter')
+            .join('units as un_filter', function () {
+              this.on('un_filter.unit_id', '=', 'uu_filter.unit_id').andOnNull(
+                'un_filter.deleted_at',
+              );
+            })
+            .whereRaw('uu_filter.user_id = u.user_id')
+            .where('uu_filter.unit_id', businessUnitId)
+            .whereNull('uu_filter.deleted_at');
+        });
+      }
+
+      if (roleId) {
+        query.where('u.role_id', roleId);
+      }
+
       return query;
     };
 
@@ -127,6 +149,8 @@ export class UserRepository implements IUserRepository {
       'r.role_name',
     );
 
+    const safeSortType = sortType === 'DESC' ? 'DESC' : 'ASC';
+
     if (sortBy === 'business_unit_name') {
       dataQuery.orderByRaw(
         `(
@@ -136,11 +160,14 @@ export class UserRepository implements IUserRepository {
           WHERE uu2.user_id = u.user_id AND uu2.deleted_at IS NULL
           ORDER BY uu2.assigned_at DESC
           LIMIT 1
-        ) ${sortType} NULLS LAST`,
+        ) ${safeSortType} NULLS LAST`,
       );
     } else {
-      const col = SORT_COLUMN_MAP[sortBy];
-      dataQuery.orderByRaw(`${col} ${sortType} NULLS LAST`);
+      const col = SORT_COLUMN_MAP[sortBy as Exclude<SortByColumn, 'business_unit_name'>];
+      if (!col) {
+        throw new Error(`Unsupported sortBy column: ${sortBy}`);
+      }
+      dataQuery.orderByRaw(`${col} ${safeSortType} NULLS LAST`);
     }
 
     const [rows, countResult] = await Promise.all([

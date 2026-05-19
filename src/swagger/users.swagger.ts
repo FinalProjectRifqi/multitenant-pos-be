@@ -226,6 +226,28 @@ export const usersSwaggerDoc = {
             schema: { type: 'string', example: 'budi' },
           },
           {
+            name: 'business_unit_id',
+            in: 'query',
+            required: false,
+            description: 'Filter pengguna berdasarkan UUID unit usaha',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '550e8400-e29b-41d4-a716-446655440000',
+            },
+          },
+          {
+            name: 'role_id',
+            in: 'query',
+            required: false,
+            description: 'Filter pengguna berdasarkan UUID role',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: 'a3bb4c2e-f123-4d56-b789-000000000002',
+            },
+          },
+          {
             name: 'sortBy',
             in: 'query',
             required: false,
