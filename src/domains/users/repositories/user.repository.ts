@@ -149,6 +149,8 @@ export class UserRepository implements IUserRepository {
       'r.role_name',
     );
 
+    const safeSortType = sortType === 'DESC' ? 'DESC' : 'ASC';
+
     if (sortBy === 'business_unit_name') {
       dataQuery.orderByRaw(
         `(
@@ -158,11 +160,14 @@ export class UserRepository implements IUserRepository {
           WHERE uu2.user_id = u.user_id AND uu2.deleted_at IS NULL
           ORDER BY uu2.assigned_at DESC
           LIMIT 1
-        ) ${sortType} NULLS LAST`,
+        ) ${safeSortType} NULLS LAST`,
       );
     } else {
-      const col = SORT_COLUMN_MAP[sortBy];
-      dataQuery.orderByRaw(`${col} ${sortType} NULLS LAST`);
+      const col = SORT_COLUMN_MAP[sortBy as Exclude<SortByColumn, 'business_unit_name'>];
+      if (!col) {
+        throw new Error(`Unsupported sortBy column: ${sortBy}`);
+      }
+      dataQuery.orderByRaw(`${col} ${safeSortType} NULLS LAST`);
     }
 
     const [rows, countResult] = await Promise.all([
