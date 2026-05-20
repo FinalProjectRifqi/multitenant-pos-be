@@ -11,9 +11,11 @@ type MockBuilder = {
   whereNot: jest.Mock;
   whereRaw: jest.Mock;
   whereIn: jest.Mock;
+  whereExists: jest.Mock;
   where: jest.Mock;
   whereILike: jest.Mock;
   orWhereILike: jest.Mock;
+  from: jest.Mock;
   select: jest.Mock;
   orderByRaw: jest.Mock;
   orderBy: jest.Mock;
@@ -35,9 +37,11 @@ const createBuilder = (): MockBuilder => {
     whereNot: jest.fn(),
     whereRaw: jest.fn(),
     whereIn: jest.fn(),
+    whereExists: jest.fn(),
     where: jest.fn(),
     whereILike: jest.fn(),
     orWhereILike: jest.fn(),
+    from: jest.fn(),
     select: jest.fn(),
     orderByRaw: jest.fn(),
     orderBy: jest.fn(),
@@ -57,6 +61,12 @@ const createBuilder = (): MockBuilder => {
   builder.whereNot.mockReturnValue(builder);
   builder.whereRaw.mockReturnValue(builder);
   builder.whereIn.mockReturnValue(builder);
+  builder.whereExists.mockImplementation((arg1: unknown) => {
+    if (typeof arg1 === 'function') {
+      arg1.call(builder);
+    }
+    return builder;
+  });
   builder.where.mockImplementation((arg1: unknown) => {
     if (typeof arg1 === 'function') {
       arg1.call(builder);
@@ -65,6 +75,7 @@ const createBuilder = (): MockBuilder => {
   });
   builder.whereILike.mockReturnValue(builder);
   builder.orWhereILike.mockReturnValue(builder);
+  builder.from.mockReturnValue(builder);
   builder.select.mockReturnValue(builder);
   builder.orderByRaw.mockReturnValue(builder);
   builder.orderBy.mockReturnValue(builder);
@@ -169,6 +180,120 @@ describe('UserRepository', () => {
       expect(result.data).toHaveLength(0);
       expect(result.total).toBe(0);
       expect(callCount).toBe(2);
+    });
+
+    it('applies business unit and role filters to data and count queries', async () => {
+      const dataBuilder = createBuilder();
+      dataBuilder.offset.mockResolvedValueOnce([]);
+
+      const countBuilder = createBuilder();
+      countBuilder.first.mockResolvedValueOnce({ count: '0' });
+
+      let callCount = 0;
+      const db = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return dataBuilder;
+        return countBuilder;
+      }) as unknown as Knex;
+
+      (db as unknown as { fn: { now: jest.Mock }; raw: jest.Mock }).fn = {
+        now: jest.fn(),
+      };
+      (db as unknown as { raw: jest.Mock }).raw = jest.fn();
+
+      const repository = new UserRepository(db);
+      await repository.findAll({
+        page: 1,
+        limit: 10,
+        businessUnitId: VALID_UUID,
+        roleId: VALID_UUID_2,
+        sortBy: 'full_name',
+        sortType: 'ASC',
+      });
+
+      expect(dataBuilder.whereExists).toHaveBeenCalledTimes(1);
+      expect(countBuilder.whereExists).toHaveBeenCalledTimes(1);
+      expect(dataBuilder.where).toHaveBeenCalledWith('u.role_id', VALID_UUID_2);
+      expect(countBuilder.where).toHaveBeenCalledWith(
+        'u.role_id',
+        VALID_UUID_2,
+      );
+      expect(dataBuilder.where).toHaveBeenCalledWith(
+        'uu_filter.unit_id',
+        VALID_UUID,
+      );
+      expect(countBuilder.where).toHaveBeenCalledWith(
+        'uu_filter.unit_id',
+        VALID_UUID,
+      );
+    });
+
+    it('applies businessUnitId filter without roleId', async () => {
+      const dataBuilder = createBuilder();
+      dataBuilder.offset.mockResolvedValueOnce([]);
+
+      const countBuilder = createBuilder();
+      countBuilder.first.mockResolvedValueOnce({ count: '0' });
+
+      let callCount = 0;
+      const db = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return dataBuilder;
+        return countBuilder;
+      }) as unknown as Knex;
+
+      (db as unknown as { fn: { now: jest.Mock }; raw: jest.Mock }).fn = {
+        now: jest.fn(),
+      };
+      (db as unknown as { raw: jest.Mock }).raw = jest.fn();
+
+      const repository = new UserRepository(db);
+      await repository.findAll({
+        page: 1,
+        limit: 10,
+        businessUnitId: VALID_UUID,
+        sortBy: 'full_name',
+        sortType: 'ASC',
+      });
+
+      expect(dataBuilder.whereExists).toHaveBeenCalledTimes(1);
+      expect(countBuilder.whereExists).toHaveBeenCalledTimes(1);
+      expect(dataBuilder.where).not.toHaveBeenCalledWith('u.role_id', expect.anything());
+      expect(dataBuilder.where).not.toHaveBeenCalledWith('r.role_id', expect.anything());
+      expect(dataBuilder.where).toHaveBeenCalledWith('uu_filter.unit_id', VALID_UUID);
+    });
+
+    it('orders by business_unit_name using correlated subquery', async () => {
+      const dataBuilder = createBuilder();
+      dataBuilder.offset.mockResolvedValueOnce([]);
+
+      const countBuilder = createBuilder();
+      countBuilder.first.mockResolvedValueOnce({ count: '0' });
+
+      let callCount = 0;
+      const db = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) return dataBuilder;
+        return countBuilder;
+      }) as unknown as Knex;
+
+      (db as unknown as { fn: { now: jest.Mock }; raw: jest.Mock }).fn = {
+        now: jest.fn(),
+      };
+      (db as unknown as { raw: jest.Mock }).raw = jest.fn();
+
+      const repository = new UserRepository(db);
+      await repository.findAll({
+        page: 1,
+        limit: 10,
+        sortBy: 'business_unit_name',
+        sortType: 'DESC',
+      });
+
+      expect(dataBuilder.orderByRaw).toHaveBeenCalledTimes(1);
+      const [rawArg] = dataBuilder.orderByRaw.mock.calls[0] as [string];
+      expect(rawArg).toContain('un2.unit_name');
+      expect(rawArg).toContain('DESC');
     });
   });
 

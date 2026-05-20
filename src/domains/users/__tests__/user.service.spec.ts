@@ -130,6 +130,22 @@ describe('UserService', () => {
       );
     });
 
+    it('passes business unit and role filters when provided', async () => {
+      mockRepository.findAll.mockResolvedValueOnce({ data: [], total: 0 });
+
+      await service.listUsers({
+        business_unit_id: VALID_UUID,
+        role_id: VALID_UUID_2,
+      });
+
+      expect(mockRepository.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({
+          businessUnitId: VALID_UUID,
+          roleId: VALID_UUID_2,
+        }),
+      );
+    });
+
     it('normalizes empty search string to undefined', async () => {
       mockRepository.findAll.mockResolvedValueOnce({ data: [], total: 0 });
 

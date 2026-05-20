@@ -3,6 +3,7 @@ import type {
   MenuItemLookupRow,
   OrderItemRow,
   OrderRow,
+  OrderTransactionHistoryRow,
 } from '../models/order.model';
 import { resolveStatusCode } from '../order-status-transition';
 
@@ -11,6 +12,10 @@ import { resolveStatusCode } from '../order-status-transition';
 // ===========================
 
 export type OrderSortByColumn = 'ordered_at' | 'total_amount' | 'customer_name';
+export type OrderTransactionHistorySortByColumn =
+  | OrderSortByColumn
+  | 'completed_at'
+  | 'payment_status';
 
 export interface FindAllOrdersParams {
   unitId: string;
@@ -18,6 +23,18 @@ export interface FindAllOrdersParams {
   page: number;
   limit: number;
   sortBy: OrderSortByColumn;
+  sortType: 'ASC' | 'DESC';
+}
+
+export interface FindTransactionHistoryParams {
+  unitId: string;
+  statusId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  paymentMethod?: 'cash' | 'cashless';
+  page: number;
+  limit: number;
+  sortBy: OrderTransactionHistorySortByColumn;
   sortType: 'ASC' | 'DESC';
 }
 
@@ -92,6 +109,10 @@ export interface IOrderRepository {
   findAll(
     params: FindAllOrdersParams,
   ): Promise<{ data: OrderRow[]; total: number }>;
+  findTransactionHistory(
+    params: FindTransactionHistoryParams,
+  ): Promise<{ data: OrderTransactionHistoryRow[]; total: number }>;
+  userHasActiveUnit(userId: string, unitId: string): Promise<boolean>;
   findById(unitId: string, orderId: string): Promise<OrderRow | null>;
   findByIdForUpdate(
     unitId: string,
@@ -154,6 +175,15 @@ const SORT_COLUMN_MAP: Record<OrderSortByColumn, string> = {
   customer_name: 'o.customer_name',
 };
 
+const TRANSACTION_HISTORY_SORT_COLUMN_MAP: Record<
+  OrderTransactionHistorySortByColumn,
+  string
+> = {
+  ...SORT_COLUMN_MAP,
+  completed_at: 'o.completed_at',
+  payment_status: 'p.payment_status',
+};
+
 // ===========================
 // Select Columns
 // ===========================
@@ -192,6 +222,38 @@ const ORDER_ITEM_SELECT_COLUMNS = [
   'oi.created_at',
   'oi.updated_at',
 ];
+
+const ORDER_TRANSACTION_HISTORY_SELECT_COLUMNS = [
+  'o.order_id',
+  'o.unit_id',
+  'u.unit_name as business_unit_name',
+  'o.order_number',
+  'o.customer_name',
+  'o.table_number',
+  'o.total_amount',
+  'o.ordered_at',
+  'o.completed_at',
+  'ot.order_type_id',
+  'ot.order_type_name',
+  'os.order_status_id',
+  'os.order_status_name',
+  'p.payment_id',
+  'p.reference_number',
+  'p.payment_status',
+  'p.amount as payment_amount',
+  'p.paid_at',
+];
+
+const PAYMENT_METHOD_SQL = `
+  CASE
+    WHEN p.payment_id IS NULL THEN NULL
+    WHEN p.qr_code_url IS NOT NULL
+      OR p.qr_string IS NOT NULL
+      OR p.expired_at > p.created_at + interval '1 minute'
+    THEN 'cashless'
+    ELSE 'cash'
+  END
+`;
 
 // ===========================
 // Repository Implementation
@@ -330,6 +392,113 @@ export class OrderRepository implements IOrderRepository {
 
     const total = Number(countResult?.count ?? 0);
     return { data: rows as OrderRow[], total };
+  }
+
+  async findTransactionHistory(
+    params: FindTransactionHistoryParams,
+  ): Promise<{ data: OrderTransactionHistoryRow[]; total: number }> {
+    const {
+      unitId,
+      statusId,
+      dateFrom,
+      dateTo,
+      paymentMethod,
+      page,
+      limit,
+      sortBy,
+      sortType,
+    } = params;
+    const offset = (page - 1) * limit;
+
+    const latestPaymentSubquery = this.db('payments')
+      .select('order_id')
+      .max('created_at as latest_created_at')
+      .whereNull('deleted_at')
+      .groupBy('order_id')
+      .as('lp');
+
+    const buildBaseQuery = () => {
+      const query = this.db('orders as o')
+        .leftJoin('units as u', function () {
+          this.on('u.unit_id', '=', 'o.unit_id').andOnNull('u.deleted_at');
+        })
+        .leftJoin('order_types as ot', function () {
+          this.on('ot.order_type_id', '=', 'o.order_type_id').andOnNull(
+            'ot.deleted_at',
+          );
+        })
+        .leftJoin('order_status as os', function () {
+          this.on('os.order_status_id', '=', 'o.order_status_id').andOnNull(
+            'os.deleted_at',
+          );
+        })
+        .leftJoin(latestPaymentSubquery, 'lp.order_id', 'o.order_id')
+        .leftJoin('payments as p', function () {
+          this.on('p.order_id', '=', 'o.order_id')
+            .andOn('p.created_at', '=', 'lp.latest_created_at')
+            .andOnNull('p.deleted_at');
+        })
+        .where('o.unit_id', unitId)
+        .whereNull('o.deleted_at');
+
+      if (statusId) {
+        query.where('o.order_status_id', statusId);
+      }
+
+      if (dateFrom) {
+        query.where('o.ordered_at', '>=', dateFrom);
+      }
+
+      if (dateTo) {
+        query.where('o.ordered_at', '<=', dateTo);
+      }
+
+      if (paymentMethod === 'cashless') {
+        query.whereRaw(
+          `p.payment_id IS NOT NULL AND (${PAYMENT_METHOD_SQL}) = 'cashless'`,
+        );
+      }
+
+      if (paymentMethod === 'cash') {
+        query.whereRaw(
+          `p.payment_id IS NOT NULL AND (${PAYMENT_METHOD_SQL}) = 'cash'`,
+        );
+      }
+
+      return query;
+    };
+
+    const col = TRANSACTION_HISTORY_SORT_COLUMN_MAP[sortBy];
+
+    const [rows, countResult] = await Promise.all([
+      buildBaseQuery()
+        .select(ORDER_TRANSACTION_HISTORY_SELECT_COLUMNS)
+        .select(this.db.raw(`${PAYMENT_METHOD_SQL} as payment_method`))
+        .orderByRaw(`${col} ${sortType} NULLS LAST`)
+        .limit(limit)
+        .offset(offset),
+      buildBaseQuery()
+        .countDistinct('o.order_id as count')
+        .first<{ count: string | number }>(),
+    ]);
+
+    const total = Number(countResult?.count ?? 0);
+    return { data: rows as OrderTransactionHistoryRow[], total };
+  }
+
+  async userHasActiveUnit(userId: string, unitId: string): Promise<boolean> {
+    const row = await this.db('user_units as uu')
+      .select('uu.user_unit_id')
+      .leftJoin('units as u', function () {
+        this.on('u.unit_id', '=', 'uu.unit_id').andOnNull('u.deleted_at');
+      })
+      .where('uu.user_id', userId)
+      .where('uu.unit_id', unitId)
+      .whereNull('uu.revoked_at')
+      .whereNull('uu.deleted_at')
+      .first<{ user_unit_id: string } | undefined>();
+
+    return row !== undefined;
   }
 
   async findById(unitId: string, orderId: string): Promise<OrderRow | null> {

@@ -1,18 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(Select-Object Name, Mode)",
-      "Read(//c/Users/Nugraha Adhitama/Documents/project/skripsi-rifqi/multitenant-pos-be/src/**)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\\\\src\" -Recurse | Where-Object { $_.Extension -eq \".ts\" } | Where-Object { $_.Name -match \"spec|test\" } | Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\\\\src\\\\common\" -Recurse | Where-Object { $_.Extension -eq \".ts\" } | Select-Object FullName)",
-      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\" -File | Where-Object { $_.Name -match \"jest|setup|test\" })",
-      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\Nugraha Adhitama\\\\Documents\\\\project\\\\skripsi-rifqi\\\\multitenant-pos-be\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)",
-      "Bash(Get-ChildItem -Recurse -Depth 3)",
-      "Bash(Select-Object Name)",
-      "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(Get-ChildItem -Path . -Directory)",
-      "Read(//mnt/c/Users/Nugraha Adhitama/Documents/project/skripsi-rifqi/multitenant-pos-be/**)"
-    ]
+    "allow": ["Read", "Grep", "Glob", "Edit", "MultiEdit", "Write"],
+    "deny": ["Bash(*)"]
   }
 }

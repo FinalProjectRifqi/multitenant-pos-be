@@ -2,9 +2,12 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config';
 import { AppError } from '../../common/errors/app-error';
 import { ErrorCodes } from '../../common/errors/error-codes';
+import type { JwtTokenPayload } from '../auth/models/auth.model';
+import { authForbiddenError } from '../auth/errors/auth.errors';
 import { unitNotFoundError } from '../business-units/errors/business-unit.errors';
 import type { CreateOrderDto } from './dto/create-order.dto';
 import type { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import type { ListTransactionHistoryQueryDto } from './dto/list-transaction-history-query.dto';
 import type {
   UpdateOrderDto,
   UpdateOrderItemInputDto,
@@ -31,11 +34,14 @@ import type {
   OrderItemRow,
   OrderListApiResponse,
   OrderRow,
+  OrderTransactionHistoryApiResponse,
+  OrderTransactionHistoryRow,
   OrderUpdateApiResponse,
 } from './models/order.model';
 import type {
   IOrderRepository,
   OrderSortByColumn,
+  OrderTransactionHistorySortByColumn,
   UpdateOrderData,
 } from './repositories/order.repository';
 import {
@@ -49,6 +55,17 @@ import {
 
 // Differences <= 1 rupiah are accepted to handle floating-point rounding
 const PRICE_TOLERANCE = 1;
+
+const ALL_UNIT_ROLE_CODES = [
+  'director',
+  'owner',
+  'super_admin',
+  'admin_grup',
+  'manajemen_grup',
+  'manajemen_group',
+  'group_management',
+  'group_manager',
+];
 
 export class OrderService {
   constructor(
@@ -112,6 +129,93 @@ export class OrderService {
       this.logger.error(
         { err: error, unitId },
         'Unexpected error while fetching orders list',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async listTransactionHistory(
+    unitId: string,
+    query: ListTransactionHistoryQueryDto,
+    user: JwtTokenPayload,
+  ): Promise<OrderTransactionHistoryApiResponse> {
+    try {
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 10;
+      const sortBy =
+        (query.sortBy as OrderTransactionHistorySortByColumn | undefined) ??
+        'ordered_at';
+      const sortType = query.sortType ?? 'DESC';
+      const statusId = query.status_id;
+      const dateFrom = this.parseOptionalDate(query.date_from, 'date_from');
+      const dateTo = this.parseOptionalDate(query.date_to, 'date_to', true);
+      const paymentMethod = query.payment_method;
+
+      this.assertDateRange(dateFrom, dateTo);
+
+      this.logger.info(
+        {
+          unitId,
+          userId: user.sub,
+          role: user.roles,
+          page,
+          limit,
+          sortBy,
+          sortType,
+          statusId,
+          dateFrom,
+          dateTo,
+          paymentMethod,
+        },
+        'Fetching transaction history',
+      );
+
+      const unit = await this.repository.findUnitById(unitId);
+      if (!unit) {
+        this.logger.warn(
+          { unitId, userId: user.sub },
+          'Transaction history failed - unit not found',
+        );
+        throw unitNotFoundError();
+      }
+
+      await this.assertCanAccessTransactionHistory(unitId, user);
+
+      const { data, total } = await this.repository.findTransactionHistory({
+        unitId,
+        statusId,
+        dateFrom,
+        dateTo,
+        paymentMethod,
+        page,
+        limit,
+        sortBy,
+        sortType,
+      });
+
+      const totalPages = Math.ceil(total / limit);
+
+      this.logger.info(
+        { unitId, userId: user.sub, total, page, limit },
+        'Transaction history fetched successfully',
+      );
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Riwayat transaksi berhasil diambil',
+        data: data.map((row) => this.mapToTransactionHistoryResponse(row)),
+        meta: { page, limit, total, totalPages },
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, unitId, userId: user.sub },
+        'Unexpected error while fetching transaction history',
       );
       throw new AppError({
         code: ErrorCodes.Internal,
@@ -842,6 +946,81 @@ export class OrderService {
     }
   }
 
+  private async assertCanAccessTransactionHistory(
+    unitId: string,
+    user: JwtTokenPayload,
+  ): Promise<void> {
+    if (this.canAccessAllUnits(user)) {
+      return;
+    }
+
+    const hasAssignedUnit = await this.repository.userHasActiveUnit(
+      user.sub,
+      unitId,
+    );
+
+    if (!hasAssignedUnit) {
+      this.logger.warn(
+        { unitId, userId: user.sub, role: user.roles },
+        'Transaction history access denied - user not assigned to unit',
+      );
+      throw authForbiddenError();
+    }
+  }
+
+  private canAccessAllUnits(user: JwtTokenPayload): boolean {
+    if (user.units.some((unit) => this.normalizeRoleCode(unit) === 'all')) {
+      return true;
+    }
+
+    const normalizedRole = this.normalizeRoleCode(user.roles);
+
+    return ALL_UNIT_ROLE_CODES.some(
+      (roleCode) =>
+        normalizedRole === roleCode || normalizedRole.includes(roleCode),
+    );
+  }
+
+  private normalizeRoleCode(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+  }
+
+  private parseOptionalDate(
+    value: string | undefined,
+    fieldName: string,
+    endOfDay = false,
+  ): Date | undefined {
+    if (!value) return undefined;
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new AppError({
+        code: ErrorCodes.ValidationFailed,
+        message: `${fieldName} harus berupa tanggal ISO 8601 yang valid`,
+        status: 400,
+      });
+    }
+
+    if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      date.setUTCHours(23, 59, 59, 999);
+    }
+
+    return date;
+  }
+
+  private assertDateRange(dateFrom?: Date, dateTo?: Date): void {
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      throw new AppError({
+        code: ErrorCodes.ValidationFailed,
+        message: 'date_from tidak boleh lebih besar dari date_to',
+        status: 400,
+      });
+    }
+  }
+
   /**
    * Generate order number in format: ORD-YYYYMMDD-XXXX
    * where XXXX is the sequence number left-padded to 4 digits.
@@ -871,6 +1050,38 @@ export class OrderService {
       order_status_id: row.order_status_id,
       order_status_name: row.order_status_name,
       ordered_at: row.ordered_at,
+    };
+  }
+
+  private mapToTransactionHistoryResponse(row: OrderTransactionHistoryRow) {
+    return {
+      order_id: row.order_id,
+      order_number: row.order_number,
+      business_unit_id: row.unit_id,
+      business_unit_name: row.business_unit_name,
+      customer_name: row.customer_name,
+      table_number: row.table_number,
+      order_type_id: row.order_type_id,
+      order_type_name: row.order_type_name,
+      total_amount: Number(row.total_amount),
+      order_status_id: row.order_status_id,
+      order_status_name: row.order_status_name,
+      ordered_at: row.ordered_at,
+      completed_at: row.completed_at,
+      payment:
+        row.payment_id &&
+        row.reference_number &&
+        row.payment_status &&
+        row.payment_amount !== null
+          ? {
+              payment_id: row.payment_id,
+              reference_number: row.reference_number,
+              payment_status: row.payment_status,
+              payment_method: row.payment_method ?? 'cash',
+              amount: Number(row.payment_amount),
+              paid_at: row.paid_at,
+            }
+          : null,
     };
   }
 
