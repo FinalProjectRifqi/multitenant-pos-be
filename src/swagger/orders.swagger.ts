@@ -93,6 +93,78 @@ const orderListItemSchema = {
   },
 };
 
+const transactionHistoryItemSchema = {
+  type: 'object',
+  properties: {
+    order_id: {
+      type: 'string',
+      format: 'uuid',
+      example: 'a3bb4c2e-f123-4d56-b789-000000000010',
+    },
+    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    business_unit_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440000',
+    },
+    business_unit_name: { type: 'string', nullable: true, example: 'Unit A' },
+    customer_name: { type: 'string', example: 'Budi Santoso' },
+    table_number: { type: 'string', nullable: true, example: '5' },
+    order_type_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440001',
+    },
+    order_type_name: { type: 'string', example: 'Dine-in' },
+    total_amount: { type: 'number', example: 55000 },
+    order_status_id: {
+      type: 'string',
+      format: 'uuid',
+      example: '550e8400-e29b-41d4-a716-446655440002',
+    },
+    order_status_name: { type: 'string', example: 'selesai' },
+    ordered_at: {
+      type: 'string',
+      format: 'date-time',
+      example: '2025-01-15T10:30:00.000Z',
+    },
+    completed_at: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      example: '2025-01-15T10:45:00.000Z',
+    },
+    payment: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        payment_id: {
+          type: 'string',
+          format: 'uuid',
+          example: 'f1cc5d3f-a234-4e67-b890-999999999999',
+        },
+        reference_number: {
+          type: 'string',
+          example: 'PAY-ORD-20250115-0001-20250115104500',
+        },
+        payment_status: { type: 'string', example: 'paid' },
+        payment_method: {
+          type: 'string',
+          enum: ['cash', 'cashless'],
+          example: 'cashless',
+        },
+        amount: { type: 'number', example: 55000 },
+        paid_at: {
+          type: 'string',
+          format: 'date-time',
+          nullable: true,
+          example: '2025-01-15T10:45:00.000Z',
+        },
+      },
+    },
+  },
+};
+
 const orderDetailSchema = {
   type: 'object',
   properties: {
@@ -365,30 +437,6 @@ const orderNotFoundResponse = {
   },
 };
 
-const paymentNotFoundResponse = {
-  description: 'Payment tidak ditemukan',
-  content: {
-    'application/json': {
-      schema: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: false },
-          error: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', example: 'PAYMENT_NOT_FOUND' },
-              message: {
-                type: 'string',
-                example: 'Payment tidak ditemukan',
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-};
-
 const paymentDetailNotFoundResponse = {
   description: 'Unit usaha, order, atau payment tidak ditemukan',
   content: {
@@ -436,30 +484,6 @@ const paymentAlreadyActiveResponse = {
               message: {
                 type: 'string',
                 example: 'Payment aktif sudah ada untuk order ini',
-              },
-            },
-          },
-        },
-      },
-    },
-  },
-};
-
-const paymentOrderNotReadyResponse = {
-  description: 'Order belum siap untuk dibayar',
-  content: {
-    'application/json': {
-      schema: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: false },
-          error: {
-            type: 'object',
-            properties: {
-              code: { type: 'string', example: 'PAYMENT_ORDER_NOT_READY' },
-              message: {
-                type: 'string',
-                example: 'Order belum siap untuk dibayar',
               },
             },
           },
@@ -729,6 +753,155 @@ export const ordersSwaggerDoc = {
     },
   ],
   paths: {
+    '/v1/orders/transaction-history/{unitId}': {
+      get: {
+        tags: ['Orders'],
+        summary: 'Ambil riwayat transaksi per unit usaha',
+        description:
+          'Mengambil riwayat transaksi pada unit usaha yang dipilih. Manajemen Grup dapat memilih semua unit usaha, sedangkan Manajer Unit dan Staf Unit hanya dapat melihat unit usaha yang aktif di-assign ke akun mereka. Membutuhkan permission `order:read`.',
+        security: bearerSecurity,
+        parameters: [
+          unitIdParam,
+          {
+            name: 'status_id',
+            in: 'query',
+            required: false,
+            description:
+              'Filter berdasarkan UUID status order. Jika tidak diisi, semua status ditampilkan.',
+            schema: {
+              type: 'string',
+              format: 'uuid',
+              example: '550e8400-e29b-41d4-a716-446655440002',
+            },
+          },
+          {
+            name: 'date_from',
+            in: 'query',
+            required: false,
+            description:
+              'Tanggal awal transaksi berdasarkan ordered_at. Format ISO 8601, contoh: 2025-01-01 atau 2025-01-01T00:00:00.000Z.',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-01-01',
+            },
+          },
+          {
+            name: 'date_to',
+            in: 'query',
+            required: false,
+            description:
+              'Tanggal akhir transaksi berdasarkan ordered_at. Jika hanya tanggal dikirim, filter berlaku sampai akhir hari UTC.',
+            schema: {
+              type: 'string',
+              format: 'date-time',
+              example: '2025-01-31',
+            },
+          },
+          {
+            name: 'payment_method',
+            in: 'query',
+            required: false,
+            description:
+              'Filter metode pembayaran berdasarkan payment terbaru pada order.',
+            schema: {
+              type: 'string',
+              enum: ['cash', 'cashless'],
+              example: 'cashless',
+            },
+          },
+          {
+            name: 'sortBy',
+            in: 'query',
+            required: false,
+            description: 'Kolom untuk pengurutan (default: ordered_at)',
+            schema: {
+              type: 'string',
+              enum: [
+                'ordered_at',
+                'completed_at',
+                'total_amount',
+                'customer_name',
+                'payment_status',
+              ],
+              default: 'ordered_at',
+              example: 'ordered_at',
+            },
+          },
+          {
+            name: 'sortType',
+            in: 'query',
+            required: false,
+            description: 'Arah pengurutan (default: DESC)',
+            schema: {
+              type: 'string',
+              enum: ['ASC', 'DESC'],
+              default: 'DESC',
+              example: 'DESC',
+            },
+          },
+          {
+            name: 'page',
+            in: 'query',
+            required: false,
+            description: 'Nomor halaman (default: 1, minimal: 1)',
+            schema: { type: 'integer', minimum: 1, default: 1, example: 1 },
+          },
+          {
+            name: 'limit',
+            in: 'query',
+            required: false,
+            description:
+              'Jumlah data per halaman (default: 10, minimal: 1, maksimal: 100)',
+            schema: {
+              type: 'integer',
+              minimum: 1,
+              maximum: 100,
+              default: 10,
+              example: 10,
+            },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Riwayat transaksi berhasil diambil',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'number', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Riwayat transaksi berhasil diambil',
+                    },
+                    data: {
+                      type: 'array',
+                      items: transactionHistoryItemSchema,
+                    },
+                    meta: {
+                      type: 'object',
+                      properties: {
+                        page: { type: 'integer', example: 1 },
+                        limit: { type: 'integer', example: 10 },
+                        total: { type: 'integer', example: 25 },
+                        totalPages: { type: 'integer', example: 3 },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '400': validationErrorResponse,
+          '401': unauthorizedResponse,
+          '403': forbiddenResponse,
+          '404': unitNotFoundResponse,
+          '500': internalServerErrorResponse,
+        },
+      },
+    },
     '/v1/orders/{unitId}': {
       get: {
         tags: ['Orders'],

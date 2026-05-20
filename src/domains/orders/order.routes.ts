@@ -9,6 +9,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateCashPaymentDto } from './dto/create-cash-payment.dto';
 import { CreateCashlessPaymentDto } from './dto/create-cashless-payment.dto';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import { ListTransactionHistoryQueryDto } from './dto/list-transaction-history-query.dto';
 import { OrderItemParamsDto, OrderUnitParamsDto } from './dto/order-params.dto';
 import {
   PaymentItemParamsDto,
@@ -116,6 +117,15 @@ export const buildOrderRouter = ({
       }
       await paymentController.simulateMidtransSettlement(req, res);
     }),
+  );
+
+  // GET /transaction-history/:unitId - list transaction history for selected unit
+  router.get(
+    '/transaction-history/:unitId',
+    requirePermission(['order:read']),
+    validateRequest(OrderUnitParamsDto, 'params'),
+    validateRequest(ListTransactionHistoryQueryDto, 'query'),
+    asyncHandler((req, res) => controller.listTransactionHistory(req, res)),
   );
 
   // GET /:unitId — list all orders for a unit
