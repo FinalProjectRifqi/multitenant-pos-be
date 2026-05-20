@@ -146,7 +146,6 @@ const transactionHistoryItemSchema = {
         reference_number: {
           type: 'string',
           example: 'PAY-ORD-A1B2C3-20250115104500',
-          example: 'PAY-ORD-20250115-0001-20250115104500',
         },
         payment_status: { type: 'string', example: 'paid' },
         payment_method: {
