@@ -13,6 +13,14 @@ export const menuConflictError = (): AppError =>
     code: DomainErrorCodes.MenuConflict,
     message: 'Nama menu sudah digunakan di unit usaha ini',
     status: 409,
+    details: [
+      {
+        property: 'menu_name',
+        constraints: {
+          unique: 'Nama menu sudah digunakan di unit usaha ini',
+        },
+      },
+    ],
   });
 
 export const menuCategoryNotFoundError = (): AppError =>
