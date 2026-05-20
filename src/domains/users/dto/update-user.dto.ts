@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -38,8 +39,9 @@ export class UpdateUserDto {
   role_id?: string;
 
   @IsOptional()
+  @ValidateIf((_object, value) => value !== null)
   @IsUUID('4', { message: 'business_unit_id harus berupa UUID yang valid' })
-  business_unit_id?: string;
+  business_unit_id?: string | null;
 
   @IsOptional()
   @IsIn(['active', 'inactive'], {

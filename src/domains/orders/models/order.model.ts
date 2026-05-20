@@ -25,6 +25,28 @@ export interface OrderRow {
   order_status_code: string;
 }
 
+export interface OrderTransactionHistoryRow {
+  order_id: string;
+  unit_id: string;
+  business_unit_name: string | null;
+  order_number: string;
+  customer_name: string;
+  table_number: string | null;
+  total_amount: number;
+  ordered_at: Date;
+  completed_at: Date | null;
+  order_type_id: string;
+  order_type_name: string;
+  order_status_id: string;
+  order_status_name: string;
+  payment_id: string | null;
+  reference_number: string | null;
+  payment_status: string | null;
+  payment_amount: number | null;
+  payment_method: 'cash' | 'cashless' | null;
+  paid_at: Date | null;
+}
+
 export interface OrderItemRow {
   order_item_id: string;
   order_id: string;
@@ -71,6 +93,30 @@ export interface OrderListItemResponse {
   ordered_at: Date;
 }
 
+export interface OrderTransactionHistoryItemResponse {
+  order_id: string;
+  order_number: string;
+  business_unit_id: string;
+  business_unit_name: string | null;
+  customer_name: string;
+  table_number: string | null;
+  order_type_id: string;
+  order_type_name: string;
+  total_amount: number;
+  order_status_id: string;
+  order_status_name: string;
+  ordered_at: Date;
+  completed_at: Date | null;
+  payment: {
+    payment_id: string;
+    reference_number: string;
+    payment_status: string;
+    payment_method: 'cash' | 'cashless';
+    amount: number;
+    paid_at: Date | null;
+  } | null;
+}
+
 export interface OrderDetailResponse {
   order_id: string;
   unit_id: string;
@@ -107,6 +153,14 @@ export interface OrderListApiResponse {
   statusCode: 200;
   message: string;
   data: OrderListItemResponse[];
+  meta: PaginationMeta;
+}
+
+export interface OrderTransactionHistoryApiResponse {
+  success: true;
+  statusCode: 200;
+  message: string;
+  data: OrderTransactionHistoryItemResponse[];
   meta: PaginationMeta;
 }
 
