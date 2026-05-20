@@ -14,6 +14,7 @@ import { menusSwaggerDoc } from '../swagger/menus.swagger';
 import { usersSwaggerDoc } from '../swagger/users.swagger';
 import { menuCategorySwaggerDoc } from '../swagger/menu-categories.swagger';
 import { inventarisSwaggerDoc } from '../swagger/inventaris.swagger';
+import { analyticsSwaggerDoc } from '../swagger/analytics.swagger';
 
 interface PackageMetadata {
   name?: string;
@@ -81,6 +82,7 @@ const buildOpenApiDocument = () => {
     menuCategorySwaggerDoc,
     inventarisSwaggerDoc,
     kdsOrderStatusSwaggerDoc,
+    analyticsSwaggerDoc,
   ];
   const { tags, paths } = mergeRouteDocs(routeDocs);
 

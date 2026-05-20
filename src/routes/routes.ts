@@ -13,6 +13,7 @@ import { buildInventarisRouter } from '../domains/inventaris/inventaris';
 import { buildOrderRouter } from '../domains/orders/order';
 import { buildOrderTypeRouter } from '../domains/order-types/order-type.routes';
 import { buildKdsOrderStatusRouter } from '../domains/kds-order-status/kds-order-status.routes';
+import { buildAnalyticsRouter } from '../domains/analytics/analytics.routes';
 import {
   createOrderEventBus,
   registerOrderEventLogging,
@@ -62,6 +63,7 @@ export const buildApiRouter = ({
       orderEventBus,
     }),
   );
+  router.use('/analytics', buildAnalyticsRouter({ knex, config, logger }));
 
   return router;
 };
