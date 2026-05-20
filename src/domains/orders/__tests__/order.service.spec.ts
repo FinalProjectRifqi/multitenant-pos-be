@@ -8,10 +8,6 @@ import type {
   OrderRow,
   OrderTransactionHistoryRow,
 } from '../models/order.model';
-import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
-import type { AppConfig } from '../../../config';
-import type { JwtTokenPayload } from '../../auth/models/auth.model';
-import type { OrderTransactionHistoryRow } from '../models/order.model';
 import { OrderService } from '../order.service';
 import type { IOrderRepository } from '../repositories/order.repository';
 
@@ -273,6 +269,7 @@ describe('OrderService transaction history', () => {
     await service.listTransactionHistory(
       UNIT_ID,
       {
+        search: '  INV-001  ',
         date_from: '2025-01-01',
         date_to: '2025-01-31',
         payment_method: 'cash',
@@ -286,6 +283,7 @@ describe('OrderService transaction history', () => {
         dateFrom: new Date('2025-01-01T00:00:00.000Z'),
         dateTo: new Date('2025-01-31T23:59:59.999Z'),
         paymentMethod: 'cash',
+        search: 'INV-001',
         sortBy: 'completed_at',
       }),
     );

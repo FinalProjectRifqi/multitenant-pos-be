@@ -156,6 +156,10 @@ export class OrderService {
       const dateFrom = this.parseOptionalDate(query.date_from, 'date_from');
       const dateTo = this.parseOptionalDate(query.date_to, 'date_to', true);
       const paymentMethod = query.payment_method;
+      const search =
+        query.search && query.search.trim().length > 0
+          ? query.search.trim()
+          : undefined;
 
       this.assertDateRange(dateFrom, dateTo);
 
@@ -172,6 +176,7 @@ export class OrderService {
           dateFrom,
           dateTo,
           paymentMethod,
+          search,
         },
         'Fetching transaction history',
       );
@@ -193,6 +198,7 @@ export class OrderService {
         dateFrom,
         dateTo,
         paymentMethod,
+        search,
         page,
         limit,
         sortBy,

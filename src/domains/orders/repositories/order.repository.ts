@@ -28,6 +28,7 @@ export interface FindAllOrdersParams {
 
 export interface FindTransactionHistoryParams {
   unitId: string;
+  search?: string;
   statusId?: string;
   dateFrom?: Date;
   dateTo?: Date;
@@ -399,6 +400,7 @@ export class OrderRepository implements IOrderRepository {
   ): Promise<{ data: OrderTransactionHistoryRow[]; total: number }> {
     const {
       unitId,
+      search,
       statusId,
       dateFrom,
       dateTo,
@@ -443,6 +445,19 @@ export class OrderRepository implements IOrderRepository {
 
       if (statusId) {
         query.where('o.order_status_id', statusId);
+      }
+
+      if (search) {
+        const likeSearch = `%${search}%`;
+        query.where(function () {
+          this.whereILike('o.order_number', likeSearch)
+            .orWhereILike('o.customer_name', likeSearch)
+            .orWhereILike('o.table_number', likeSearch)
+            .orWhereILike('u.unit_name', likeSearch)
+            .orWhereILike('ot.order_type_name', likeSearch)
+            .orWhereILike('os.order_status_name', likeSearch)
+            .orWhereILike('p.reference_number', likeSearch);
+        });
       }
 
       if (dateFrom) {
