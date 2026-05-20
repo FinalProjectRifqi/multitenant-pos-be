@@ -4,7 +4,10 @@ import { ErrorCodes } from '../../common/errors/error-codes';
 import type { CreateBusinessUnitDto } from './dto/create-business-unit.dto';
 import type { ListBusinessUnitsQueryDto } from './dto/list-business-units-query.dto';
 import type { UpdateBusinessUnitDto } from './dto/update-business-unit.dto';
-import { unitNotFoundError } from './errors/business-unit.errors';
+import {
+  unitConflictError,
+  unitNotFoundError,
+} from './errors/business-unit.errors';
 import type {
   BusinessUnit,
   BusinessUnitDeleteResponse,
@@ -116,6 +119,15 @@ export class BusinessUnitService {
         'Creating business unit',
       );
 
+      const existing = await this.repository.findByName(dto.business_unit_name);
+      if (existing) {
+        this.logger.warn(
+          { name: dto.business_unit_name },
+          'Business unit creation failed - name already exists',
+        );
+        throw unitConflictError();
+      }
+
       const status = dto.is_active === false ? 'inactive' : 'active';
 
       const unit = await this.repository.create({
@@ -217,6 +229,20 @@ export class BusinessUnitService {
       if (!existing) {
         this.logger.warn({ unitId: id }, 'Business unit not found for update');
         throw unitNotFoundError();
+      }
+
+      if (dto.business_unit_name !== undefined) {
+        const conflict = await this.repository.findByName(
+          dto.business_unit_name,
+          id,
+        );
+        if (conflict) {
+          this.logger.warn(
+            { unitId: id, name: dto.business_unit_name },
+            'Business unit update failed - name already exists',
+          );
+          throw unitConflictError();
+        }
       }
 
       const updateData: {

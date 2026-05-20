@@ -14,6 +14,7 @@ const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
 const createMockRepository = (): jest.Mocked<IBusinessUnitRepository> => ({
   findAll: jest.fn(),
   findById: jest.fn(),
+  findByName: jest.fn(),
   getStats: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
@@ -210,6 +211,30 @@ describe('BusinessUnitService', () => {
       );
     });
 
+    it('throws 409 UNIT_CONFLICT when unit name already exists', async () => {
+      mockRepository.findByName.mockResolvedValueOnce(createBusinessUnit());
+
+      await expect(
+        service.createBusinessUnit({
+          business_unit_name: 'Toko Maju Jaya',
+          business_unit_address: 'Jl. Sudirman No. 10, Jakarta',
+        }),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.UnitConflict,
+        status: 409,
+        details: [
+          expect.objectContaining({
+            property: 'business_unit_name',
+            constraints: expect.objectContaining({
+              unique: 'Nama unit usaha sudah digunakan',
+            }),
+          }),
+        ],
+      });
+
+      expect(mockRepository.create).not.toHaveBeenCalled();
+    });
+
     it('throws 500 on unexpected repository error', async () => {
       mockRepository.create.mockRejectedValueOnce(new Error('DB error'));
 
@@ -330,6 +355,46 @@ describe('BusinessUnitService', () => {
       expect(mockRepository.update).toHaveBeenCalledWith(
         VALID_UUID,
         expect.objectContaining({ status: 'inactive' }),
+      );
+    });
+
+    it('throws 409 UNIT_CONFLICT when new name already exists on another unit', async () => {
+      const existing = createBusinessUnit();
+      mockRepository.findById.mockResolvedValueOnce(existing);
+      mockRepository.findByName.mockResolvedValueOnce(
+        createBusinessUnit({ unit_id: '660e8400-e29b-41d4-a716-446655440001' }),
+      );
+
+      await expect(
+        service.updateBusinessUnit(VALID_UUID, {
+          business_unit_name: 'Toko Maju Jaya',
+        }),
+      ).rejects.toMatchObject({
+        code: DomainErrorCodes.UnitConflict,
+        status: 409,
+      });
+
+      expect(mockRepository.findByName).toHaveBeenCalledWith(
+        'Toko Maju Jaya',
+        VALID_UUID,
+      );
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('excludes current unit when checking name conflicts on update', async () => {
+      const existing = createBusinessUnit();
+      const updated = createBusinessUnit({ unit_name: 'Nama Baru' });
+      mockRepository.findById.mockResolvedValueOnce(existing);
+      mockRepository.findByName.mockResolvedValueOnce(null);
+      mockRepository.update.mockResolvedValueOnce(updated);
+
+      await service.updateBusinessUnit(VALID_UUID, {
+        business_unit_name: 'Nama Baru',
+      });
+
+      expect(mockRepository.findByName).toHaveBeenCalledWith(
+        'Nama Baru',
+        VALID_UUID,
       );
     });
 

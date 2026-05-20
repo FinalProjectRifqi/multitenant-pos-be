@@ -150,6 +150,48 @@ const validationErrorResponse = {
   },
 };
 
+const conflictResponse = {
+  description: 'Nama unit usaha sudah digunakan',
+  content: {
+    'application/json': {
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'UNIT_CONFLICT' },
+          message: {
+            type: 'string',
+            example: 'Nama unit usaha sudah digunakan',
+          },
+          details: {
+            type: 'array',
+            items: { type: 'object' },
+            example: [
+              {
+                property: 'business_unit_name',
+                constraints: {
+                  unique: 'Nama unit usaha sudah digunakan',
+                },
+              },
+            ],
+          },
+          error: {
+            type: 'object',
+            properties: {
+              code: { type: 'string', example: 'UNIT_CONFLICT' },
+              message: {
+                type: 'string',
+                example: 'Nama unit usaha sudah digunakan',
+              },
+              details: { type: 'array', items: { type: 'object' } },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
 const bearerSecurity = [{ bearerAuth: [] }];
 
 export const businessUnitsSwaggerDoc = {
@@ -314,6 +356,7 @@ export const businessUnitsSwaggerDoc = {
           '400': validationErrorResponse,
           '401': unauthorizedResponse,
           '403': forbiddenResponse,
+          '409': conflictResponse,
           '500': internalServerErrorResponse,
         },
       },
@@ -481,6 +524,7 @@ export const businessUnitsSwaggerDoc = {
           '401': unauthorizedResponse,
           '403': forbiddenResponse,
           '404': notFoundResponse,
+          '409': conflictResponse,
           '500': internalServerErrorResponse,
         },
       },

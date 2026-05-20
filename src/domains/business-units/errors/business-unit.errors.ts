@@ -9,6 +9,23 @@ export const unitNotFoundError = (details?: unknown): AppError =>
     details,
   });
 
+export const unitConflictError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.UnitConflict,
+    message: 'Nama unit usaha sudah digunakan',
+    status: 409,
+    details:
+      details ??
+      [
+        {
+          property: 'business_unit_name',
+          constraints: {
+            unique: 'Nama unit usaha sudah digunakan',
+          },
+        },
+      ],
+  });
+
 export const unitInvalidPhoneError = (details?: unknown): AppError =>
   new AppError({
     code: DomainErrorCodes.UnitInvalidPhone,
