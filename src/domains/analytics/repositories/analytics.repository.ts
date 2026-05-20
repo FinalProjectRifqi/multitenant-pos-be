@@ -256,7 +256,9 @@ export class AnalyticsRepository implements IAnalyticsRepository {
       .where('o.ordered_at', '<=', endDate)
       .select(
         this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
-        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code IN ('SELESAI', 'DIBATALKAN') THEN 1 END) as total_transaksi",
+        ),
         this.knex.raw(
           "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
         ),
@@ -366,7 +368,7 @@ export class AnalyticsRepository implements IAnalyticsRepository {
         this.knex.raw('SUM(oi.quantity * oi.item_price) as pendapatan'),
       )
       .groupBy('mi.menu_item_id', 'mi.menu_item_name', 'mc.category_name')
-      .orderBy('qty_terjual', 'desc')
+      .orderBy('pendapatan', 'desc')
       .limit(limit)) as TopMenuRaw[];
 
     return rows.map((r) => ({
@@ -514,7 +516,9 @@ export class AnalyticsRepository implements IAnalyticsRepository {
       .where('o.ordered_at', '<=', endDate)
       .select(
         this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
-        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code IN ('SELESAI', 'DIBATALKAN') THEN 1 END) as total_transaksi",
+        ),
         this.knex.raw(
           "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
         ),
@@ -586,7 +590,7 @@ export class AnalyticsRepository implements IAnalyticsRepository {
         this.knex.raw('SUM(oi.quantity * oi.item_price) as pendapatan'),
       )
       .groupBy('mi.menu_item_id', 'mi.menu_item_name', 'mc.category_name')
-      .orderBy('qty_terjual', 'desc')
+      .orderBy('pendapatan', 'desc')
       .limit(limit)) as TopMenuRaw[];
 
     return rows.map((r) => ({
@@ -631,7 +635,9 @@ export class AnalyticsRepository implements IAnalyticsRepository {
         'u.unit_id',
         'u.unit_name',
         this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
-        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code IN ('SELESAI', 'DIBATALKAN') THEN 1 END) as total_transaksi",
+        ),
         this.knex.raw(
           "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
         ),
@@ -679,7 +685,9 @@ export class AnalyticsRepository implements IAnalyticsRepository {
         'u.unit_id',
         'u.unit_name',
         this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
-        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code IN ('SELESAI', 'DIBATALKAN') THEN 1 END) as total_transaksi",
+        ),
         this.knex.raw(
           "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
         ),
