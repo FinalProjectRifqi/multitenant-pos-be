@@ -675,5 +675,177 @@ export const analyticsSwaggerDoc = {
         },
       },
     },
+
+    // ─── Group Summary ─────────────────────────────────────────────────────────
+    '/v1/analytics/group/summary': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Ringkasan analytics seluruh unit (Group Management)',
+        description:
+          'Mengembalikan KPI agregat, tren penjualan, top menu, dan tabel performa per unit untuk semua unit aktif. ' +
+          'Hanya dapat diakses oleh role GROUP_MANAGEMENT dengan permission analytics:read.',
+        security: bearerSecurity,
+        parameters: [periodQueryParam],
+        responses: {
+          200: {
+            description: 'Berhasil mengambil ringkasan analytics grup',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'integer', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Berhasil mengambil ringkasan analytics grup',
+                    },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        kpi: {
+                          type: 'object',
+                          properties: {
+                            total_omzet: { type: 'number', example: 50000000 },
+                            total_transaksi: { type: 'integer', example: 500 },
+                            rata_rata_order: {
+                              type: 'number',
+                              example: 100000,
+                            },
+                            selesai: { type: 'integer', example: 470 },
+                            dibatalkan: { type: 'integer', example: 30 },
+                            stok_kritis: { type: 'integer', example: 5 },
+                          },
+                        },
+                        sales_trend: {
+                          type: 'array',
+                          items: salesTrendPointSchema,
+                        },
+                        top_menus: {
+                          type: 'array',
+                          items: topMenuRowSchema,
+                        },
+                        unit_performance: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              unit_id: { type: 'string', format: 'uuid' },
+                              unit_name: {
+                                type: 'string',
+                                example: 'Unit Pusat',
+                              },
+                              omzet: { type: 'number', example: 10000000 },
+                              transaksi: { type: 'integer', example: 100 },
+                              rata_rata_order: {
+                                type: 'number',
+                                example: 100000,
+                              },
+                              selesai: { type: 'integer', example: 95 },
+                              dibatalkan: { type: 'integer', example: 5 },
+                              stok_kritis: { type: 'integer', example: 1 },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: unauthorizedResponse,
+          403: forbiddenResponse,
+        },
+      },
+    },
+
+    // ─── Group Compare ─────────────────────────────────────────────────────────
+    '/v1/analytics/group/compare': {
+      get: {
+        tags: ['Analytics'],
+        summary: 'Perbandingan KPI antar unit (Group Management)',
+        description:
+          'Mengembalikan data KPI untuk unit-unit yang dipilih dalam rentang waktu tertentu, ' +
+          'digunakan untuk membandingkan performa antar unit secara visual. ' +
+          'Hanya dapat diakses oleh role GROUP_MANAGEMENT dengan permission analytics:read.',
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: 'unitIds',
+            in: 'query',
+            required: true,
+            description: 'UUID unit yang ingin dibandingkan, dipisahkan koma.',
+            schema: {
+              type: 'string',
+              example:
+                '550e8400-e29b-41d4-a716-446655440000,660f8400-e29b-41d4-a716-446655440000',
+            },
+          },
+          periodQueryParam,
+        ],
+        responses: {
+          200: {
+            description: 'Berhasil mengambil data perbandingan unit',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'integer', example: 200 },
+                    message: {
+                      type: 'string',
+                      example: 'Berhasil mengambil data perbandingan unit',
+                    },
+                    data: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          unit_id: { type: 'string', format: 'uuid' },
+                          unit_name: { type: 'string', example: 'Unit Pusat' },
+                          omzet: { type: 'number', example: 10000000 },
+                          transaksi: { type: 'integer', example: 100 },
+                          rata_rata_order: { type: 'number', example: 100000 },
+                          selesai: { type: 'integer', example: 95 },
+                          dibatalkan: { type: 'integer', example: 5 },
+                          stok_kritis: { type: 'integer', example: 3 },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: 'Parameter unitIds tidak valid',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: false },
+                    error: {
+                      type: 'object',
+                      properties: {
+                        code: { type: 'string', example: 'VALIDATION_ERROR' },
+                        message: {
+                          type: 'string',
+                          example: 'unitIds wajib diisi',
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: unauthorizedResponse,
+          403: forbiddenResponse,
+        },
+      },
+    },
   },
 };

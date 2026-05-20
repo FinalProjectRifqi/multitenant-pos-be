@@ -21,6 +21,8 @@ const getTopMenusMock = jest.fn();
 const getRecentPaymentsMock = jest.fn();
 const getInventoryStatusMock = jest.fn();
 const getDailyInventoryMock = jest.fn();
+const getGroupSummaryMock = jest.fn();
+const getGroupCompareMock = jest.fn();
 
 jest.mock('jose', () => {
   class JWTExpired extends Error {}
@@ -38,6 +40,8 @@ jest.mock('../analytics.controller', () => ({
     getRecentPayments: getRecentPaymentsMock,
     getInventoryStatus: getInventoryStatusMock,
     getDailyInventory: getDailyInventoryMock,
+    getGroupSummary: getGroupSummaryMock,
+    getGroupCompare: getGroupCompareMock,
   })),
 }));
 
@@ -112,6 +116,8 @@ describe('Analytics routes — auth matrix', () => {
     getRecentPaymentsMock.mockImplementation(successHandler);
     getInventoryStatusMock.mockImplementation(successHandler);
     getDailyInventoryMock.mockImplementation(successHandler);
+    getGroupSummaryMock.mockImplementation(successHandler);
+    getGroupCompareMock.mockImplementation(successHandler);
   });
 
   // ─── 401 without token ──────────────────────────────────────────────────────
@@ -267,6 +273,119 @@ describe('Analytics routes — auth matrix', () => {
 
       expect(res.status).toBe(200);
       expect(getDailyInventoryMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Group routes — 401 without token ───────────────────────────────────────
+
+  describe('Group routes — 401 no Authorization header', () => {
+    it('GET /analytics/group/summary returns 401', async () => {
+      const app = createApp();
+      const res = await request(app).get('/analytics/group/summary');
+      expect(res.status).toBe(401);
+    });
+
+    it('GET /analytics/group/compare returns 401', async () => {
+      const app = createApp();
+      const res = await request(app).get('/analytics/group/compare');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ─── Group routes — 403 wrong role (not GROUP_MANAGEMENT) ───────────────────
+
+  describe('Group routes — 403 wrong role', () => {
+    it('GET /analytics/group/summary returns 403 for UNIT_MANAGER role', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: {
+          ...createValidPayload(['analytics:read']),
+          roles: 'UNIT_MANAGER',
+        },
+      });
+      const app = createApp();
+
+      const res = await request(app)
+        .get('/analytics/group/summary')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe(DomainErrorCodes.AuthForbidden);
+    });
+
+    it('GET /analytics/group/compare returns 403 for UNIT_MANAGER role', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: {
+          ...createValidPayload(['analytics:read']),
+          roles: 'UNIT_MANAGER',
+        },
+      });
+      const app = createApp();
+
+      const res = await request(app)
+        .get('/analytics/group/compare?unitIds=uuid1,uuid2')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ─── Group routes — 403 missing analytics:read ──────────────────────────────
+
+  describe('Group routes — 403 missing analytics:read permission', () => {
+    it('GET /analytics/group/summary returns 403 without analytics:read', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: {
+          ...createValidPayload(['menu:read']),
+          roles: 'GROUP_MANAGEMENT',
+        },
+      });
+      const app = createApp();
+
+      const res = await request(app)
+        .get('/analytics/group/summary')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ─── Group routes — 200 valid GROUP_MANAGEMENT + analytics:read ─────────────
+
+  describe('Group routes — 200 valid GROUP_MANAGEMENT with analytics:read', () => {
+    it('GET /analytics/group/summary returns 200', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: {
+          ...createValidPayload(['analytics:read']),
+          roles: 'GROUP_MANAGEMENT',
+        },
+      });
+      const app = createApp();
+
+      const res = await request(app)
+        .get('/analytics/group/summary?period=7d')
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(200);
+      expect(getGroupSummaryMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('GET /analytics/group/compare returns 200', async () => {
+      jwtVerifyMock.mockResolvedValueOnce({
+        payload: {
+          ...createValidPayload(['analytics:read']),
+          roles: 'GROUP_MANAGEMENT',
+        },
+      });
+      const app = createApp();
+
+      const res = await request(app)
+        .get(
+          '/analytics/group/compare?unitIds=550e8400-e29b-41d4-a716-446655440000,660f8400-e29b-41d4-a716-446655440000',
+        )
+        .set('Authorization', 'Bearer valid-token');
+
+      expect(res.status).toBe(200);
+      expect(getGroupCompareMock).toHaveBeenCalledTimes(1);
     });
   });
 });

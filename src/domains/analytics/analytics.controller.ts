@@ -3,6 +3,7 @@ import type { AnalyticsService } from './analytics.service';
 import type { AnalyticsUnitParamsDto } from './dto/analytics-params.dto';
 import type { AnalyticsPeriodQueryDto } from './dto/analytics-period-query.dto';
 import type { AnalyticsDailyInventoryQueryDto } from './dto/analytics-daily-inventory-query.dto';
+import type { AnalyticsGroupCompareQueryDto } from './dto/analytics-group-compare-query.dto';
 
 export class AnalyticsController {
   constructor(private readonly service: AnalyticsService) {}
@@ -44,6 +45,25 @@ export class AnalyticsController {
     const { unitId } = req.params as unknown as AnalyticsUnitParamsDto;
     const { date } = req.query as unknown as AnalyticsDailyInventoryQueryDto;
     const result = await this.service.getDailyInventory(unitId, date);
+    res.status(200).json(result);
+  }
+
+  // ─── Group Analytics ────────────────────────────
+
+  async getGroupSummary(req: Request, res: Response): Promise<void> {
+    const { period = '7d' } = req.query as unknown as AnalyticsPeriodQueryDto;
+    const result = await this.service.getGroupSummary(period);
+    res.status(200).json(result);
+  }
+
+  async getGroupCompare(req: Request, res: Response): Promise<void> {
+    const { unitIds, period = '7d' } =
+      req.query as unknown as AnalyticsGroupCompareQueryDto;
+    const ids = unitIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const result = await this.service.getGroupCompare(ids, period);
     res.status(200).json(result);
   }
 }

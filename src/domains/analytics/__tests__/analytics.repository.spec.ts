@@ -20,6 +20,7 @@ const createBuilder = (): MockBuilder => {
     whereNull: jest.fn(),
     whereRaw: jest.fn(),
     whereNot: jest.fn(),
+    whereIn: jest.fn(),
     select: jest.fn(),
     orderBy: jest.fn(),
     orderByRaw: jest.fn(),
@@ -498,6 +499,221 @@ describe('AnalyticsRepository', () => {
       const result = await repo.getDailyInventory('u1', '2026-05-19');
 
       expect(result).toEqual([]);
+    });
+  });
+
+  // ─── Group Repository Methods ───────────────────────────────────────────────
+
+  describe('getGroupKpiRaw', () => {
+    it('returns aggregated KPI row', async () => {
+      const row = {
+        total_omzet: '5000000',
+        total_transaksi: '50',
+        selesai: '45',
+        dibatalkan: '5',
+      };
+      const b = createBuilder();
+      b.first.mockResolvedValueOnce(row);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupKpiRaw(new Date(), new Date());
+
+      expect(result).toEqual(row);
+    });
+
+    it('returns zeros when no row returned', async () => {
+      const b = createBuilder();
+      b.first.mockResolvedValueOnce(undefined);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupKpiRaw(new Date(), new Date());
+
+      expect(result.total_omzet).toBe(0);
+      expect(result.total_transaksi).toBe(0);
+      expect(result.selesai).toBe(0);
+      expect(result.dibatalkan).toBe(0);
+    });
+  });
+
+  describe('getGroupSalesTrend', () => {
+    it('maps rows to SalesTrendPoint with label', async () => {
+      const rawRows = [
+        { bucket: '2026-05-12', omzet: '1000000', transaksi: '10' },
+        { bucket: '2026-05-13', omzet: '2000000', transaksi: '20' },
+      ];
+      const b = createBuilder();
+      b.orderByRaw.mockResolvedValueOnce(rawRows);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupSalesTrend(
+        new Date(),
+        new Date(),
+        '7d',
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[0].omzet).toBe(1000000);
+      expect(result[0].transaksi).toBe(10);
+      expect(typeof result[0].label).toBe('string');
+    });
+
+    it('returns empty array when no trend data', async () => {
+      const b = createBuilder();
+      b.orderByRaw.mockResolvedValueOnce([]);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupSalesTrend(
+        new Date(),
+        new Date(),
+        '7d',
+      );
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getGroupTopMenus', () => {
+    it('maps rows to TopMenuRow', async () => {
+      const rawRows = [
+        {
+          menu_item_id: 'm1',
+          menu_item_name: 'Nasi Goreng',
+          category_name: 'Makanan',
+          qty_terjual: '20',
+          pendapatan: '400000',
+        },
+      ];
+      const b = createBuilder();
+      b.limit.mockResolvedValueOnce(rawRows);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupTopMenus(new Date(), new Date(), 5);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].menu_item_name).toBe('Nasi Goreng');
+      expect(result[0].qty_terjual).toBe(20);
+      expect(result[0].pendapatan).toBe(400000);
+    });
+  });
+
+  describe('getGroupTotalStokKritis', () => {
+    it('returns parsed count', async () => {
+      const b = createBuilder();
+      b.first.mockResolvedValueOnce({ count: '7' });
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupTotalStokKritis();
+
+      expect(result).toBe(7);
+    });
+
+    it('returns 0 when no critical stock', async () => {
+      const b = createBuilder();
+      b.first.mockResolvedValueOnce(undefined);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupTotalStokKritis();
+
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('getUnitPerformanceTable', () => {
+    it('maps rows to UnitPerformanceRow with rata_rata_order', async () => {
+      const rawRows = [
+        {
+          unit_id: 'u1',
+          unit_name: 'Unit A',
+          total_omzet: '2000000',
+          total_transaksi: '10',
+          selesai: '9',
+          dibatalkan: '1',
+        },
+      ];
+      const b = createBuilder();
+      // First groupBy call: chainable for getUnitPerformanceTable (returns b so orderBy can chain)
+      b.groupBy.mockReturnValueOnce(b);
+      b.orderBy.mockResolvedValueOnce(rawRows);
+      // Second groupBy call: getStokKritisForUnits resolves with stok data
+      b.groupBy.mockResolvedValueOnce([{ unit_id: 'u1', count: '2' }]);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getUnitPerformanceTable(new Date(), new Date());
+
+      expect(result).toHaveLength(1);
+      expect(result[0].unit_id).toBe('u1');
+      expect(result[0].unit_name).toBe('Unit A');
+      expect(result[0].omzet).toBe(2000000);
+      expect(result[0].transaksi).toBe(10);
+      expect(result[0].rata_rata_order).toBe(200000);
+    });
+
+    it('returns empty array when no units have orders', async () => {
+      const b = createBuilder();
+      b.orderBy.mockResolvedValueOnce([]);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getUnitPerformanceTable(new Date(), new Date());
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getGroupCompare', () => {
+    it('returns empty array for empty unitIds', async () => {
+      const b = createBuilder();
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      const result = await repo.getGroupCompare([], new Date(), new Date());
+
+      expect(result).toEqual([]);
+    });
+
+    it('maps found rows and fills zero row for missing unitIds', async () => {
+      const rawRows = [
+        {
+          unit_id: 'u1',
+          unit_name: 'Unit A',
+          total_omzet: '1000000',
+          total_transaksi: '5',
+          selesai: '5',
+          dibatalkan: '0',
+        },
+      ];
+      const b = createBuilder();
+      b.groupBy.mockResolvedValueOnce(rawRows);
+      // Second groupBy call: getStokKritisForUnits resolves with stok data for u1
+      b.groupBy.mockResolvedValueOnce([{ unit_id: 'u1', count: '3' }]);
+      const knex = createKnex(b);
+
+      const repo = new AnalyticsRepository(knex);
+      // Request u1 (found) and u2 (not found)
+      const result = await repo.getGroupCompare(
+        ['u1', 'u2'],
+        new Date(),
+        new Date(),
+      );
+
+      expect(result).toHaveLength(2);
+      expect(result[0].unit_id).toBe('u1');
+      expect(result[0].omzet).toBe(1000000);
+      expect(result[0].rata_rata_order).toBe(200000);
+      expect(result[0].stok_kritis).toBe(3);
+      // u2 is missing from DB — should be a zero row
+      expect(result[1].unit_id).toBe('u2');
+      expect(result[1].omzet).toBe(0);
+      expect(result[1].transaksi).toBe(0);
+      expect(result[1].stok_kritis).toBe(0);
     });
   });
 });

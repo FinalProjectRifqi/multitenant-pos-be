@@ -1,11 +1,13 @@
 import type { Knex } from 'knex';
 import type {
-  InventoryStatusRow,
-  SalesTrendPoint,
-  TopMenuRow,
-  PaymentHistoryRow,
   DailyInventoryRow,
+  InventoryStatusRow,
+  PaymentHistoryRow,
+  SalesTrendPoint,
   StockStatus,
+  TopMenuRow,
+  UnitCompareRow,
+  UnitPerformanceRow,
 } from '../models/analytics.model';
 
 // ===========================
@@ -125,6 +127,13 @@ interface KpiRow {
   dibatalkan: string | number;
 }
 
+type GroupKpiRaw = KpiRow;
+
+interface UnitKpiRaw extends KpiRow {
+  unit_id: string;
+  unit_name: string;
+}
+
 interface SalesTrendRow {
   bucket: string;
   omzet: string | number;
@@ -189,14 +198,34 @@ export interface IAnalyticsRepository {
     unitId: string,
     limit: number,
   ): Promise<PaymentHistoryRow[]>;
-  getInventoryStatus(
-    unitId: string,
-  ): Promise<{
+  getInventoryStatus(unitId: string): Promise<{
     lowOrCritical: InventoryStatusRow[];
     outOfStock: InventoryStatusRow[];
   }>;
   getDailyInventory(unitId: string, date: string): Promise<DailyInventoryRow[]>;
   findUnitById(unitId: string): Promise<{ unit_id: string } | null>;
+  // ─── Group Analytics ────────────────────────────
+  getGroupKpiRaw(startDate: Date, endDate: Date): Promise<GroupKpiRaw>;
+  getGroupSalesTrend(
+    startDate: Date,
+    endDate: Date,
+    period: string,
+  ): Promise<SalesTrendPoint[]>;
+  getGroupTopMenus(
+    startDate: Date,
+    endDate: Date,
+    limit: number,
+  ): Promise<TopMenuRow[]>;
+  getGroupTotalStokKritis(): Promise<number>;
+  getUnitPerformanceTable(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UnitPerformanceRow[]>;
+  getGroupCompare(
+    unitIds: string[],
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UnitCompareRow[]>;
 }
 
 // ===========================
@@ -384,9 +413,7 @@ export class AnalyticsRepository implements IAnalyticsRepository {
     }));
   }
 
-  async getInventoryStatus(
-    unitId: string,
-  ): Promise<{
+  async getInventoryStatus(unitId: string): Promise<{
     lowOrCritical: InventoryStatusRow[];
     outOfStock: InventoryStatusRow[];
   }> {
@@ -475,5 +502,253 @@ export class AnalyticsRepository implements IAnalyticsRepository {
       waste_qty: r.waste_qty ?? null,
       variance_qty: r.variance_qty ?? 0,
     }));
+  }
+
+  // ─── Group Analytics ────────────────────────────
+
+  async getGroupKpiRaw(startDate: Date, endDate: Date): Promise<GroupKpiRaw> {
+    const row = await this.knex('orders as o')
+      .join('order_status as os', 'o.order_status_id', 'os.order_status_id')
+      .whereNull('o.deleted_at')
+      .where('o.ordered_at', '>=', startDate)
+      .where('o.ordered_at', '<=', endDate)
+      .select(
+        this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
+        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
+        ),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'DIBATALKAN' THEN 1 END) as dibatalkan",
+        ),
+      )
+      .first<GroupKpiRaw>();
+
+    return (
+      row ?? { total_omzet: 0, total_transaksi: 0, selesai: 0, dibatalkan: 0 }
+    );
+  }
+
+  async getGroupSalesTrend(
+    startDate: Date,
+    endDate: Date,
+    period: string,
+  ): Promise<SalesTrendPoint[]> {
+    const rows = (await this.knex('orders as o')
+      .whereNull('o.deleted_at')
+      .where('o.ordered_at', '>=', startDate)
+      .where('o.ordered_at', '<=', endDate)
+      .select(
+        this.knex.raw("DATE_TRUNC('day', o.ordered_at)::date::text as bucket"),
+        this.knex.raw('COALESCE(SUM(o.total_amount), 0) as omzet'),
+        this.knex.raw('COUNT(o.order_id) as transaksi'),
+      )
+      .groupByRaw("DATE_TRUNC('day', o.ordered_at)")
+      .orderByRaw("DATE_TRUNC('day', o.ordered_at) ASC")) as SalesTrendRow[];
+
+    return rows.map((r) => {
+      const date = r.bucket;
+      const d = new Date(date);
+      const label = this.formatDayLabel(d, period);
+      return {
+        label,
+        date,
+        omzet: Number(r.omzet),
+        transaksi: Number(r.transaksi),
+      };
+    });
+  }
+
+  async getGroupTopMenus(
+    startDate: Date,
+    endDate: Date,
+    limit: number,
+  ): Promise<TopMenuRow[]> {
+    const rows = (await this.knex('order_items as oi')
+      .join('orders as o', 'oi.order_id', 'o.order_id')
+      .join('order_status as os', 'o.order_status_id', 'os.order_status_id')
+      .join('menu_items as mi', 'oi.menu_item_id', 'mi.menu_item_id')
+      .join(
+        'menu_categories as mc',
+        'mi.menu_category_id',
+        'mc.menu_category_id',
+      )
+      .whereNull('o.deleted_at')
+      .whereNull('oi.deleted_at')
+      .where('o.ordered_at', '>=', startDate)
+      .where('o.ordered_at', '<=', endDate)
+      .whereNot('os.order_status_code', 'DIBATALKAN')
+      .select(
+        'mi.menu_item_id',
+        'mi.menu_item_name',
+        'mc.category_name',
+        this.knex.raw('SUM(oi.quantity) as qty_terjual'),
+        this.knex.raw('SUM(oi.quantity * oi.item_price) as pendapatan'),
+      )
+      .groupBy('mi.menu_item_id', 'mi.menu_item_name', 'mc.category_name')
+      .orderBy('qty_terjual', 'desc')
+      .limit(limit)) as TopMenuRaw[];
+
+    return rows.map((r) => ({
+      menu_item_id: r.menu_item_id,
+      menu_item_name: r.menu_item_name,
+      category_name: r.category_name,
+      qty_terjual: Number(r.qty_terjual),
+      pendapatan: Number(r.pendapatan),
+    }));
+  }
+
+  async getGroupTotalStokKritis(): Promise<number> {
+    const result = await this.knex('inventory_items as ii')
+      .join(
+        'inventory_items_units as iiu',
+        'ii.inventory_item_id',
+        'iiu.inventory_item_id',
+      )
+      .whereNull('ii.deleted_at')
+      .whereNull('iiu.deleted_at')
+      .whereRaw('ii.current_stock IS NOT NULL AND ii.min_threshold IS NOT NULL')
+      .whereRaw('ii.current_stock < ii.min_threshold')
+      .count<{ count: string }>('ii.inventory_item_id as count')
+      .first();
+
+    return parseInt(result?.count ?? '0', 10);
+  }
+
+  async getUnitPerformanceTable(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UnitPerformanceRow[]> {
+    const rows = (await this.knex('orders as o')
+      .join('order_status as os', 'o.order_status_id', 'os.order_status_id')
+      .join('units as u', 'o.unit_id', 'u.unit_id')
+      .whereNull('o.deleted_at')
+      .whereNull('u.deleted_at')
+      .where('u.status', 'active')
+      .where('o.ordered_at', '>=', startDate)
+      .where('o.ordered_at', '<=', endDate)
+      .select(
+        'u.unit_id',
+        'u.unit_name',
+        this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
+        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
+        ),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'DIBATALKAN' THEN 1 END) as dibatalkan",
+        ),
+      )
+      .groupBy('u.unit_id', 'u.unit_name')
+      .orderBy('total_omzet', 'desc')) as UnitKpiRaw[];
+
+    const unitIds = rows.map((r) => r.unit_id);
+    const stokKritisMap = await this.getStokKritisForUnits(unitIds);
+
+    return rows.map((r) => {
+      const totalTr = Number(r.total_transaksi);
+      const totalOmzet = Number(r.total_omzet);
+      return {
+        unit_id: r.unit_id,
+        unit_name: r.unit_name,
+        omzet: totalOmzet,
+        transaksi: totalTr,
+        rata_rata_order: totalTr > 0 ? Math.round(totalOmzet / totalTr) : 0,
+        selesai: Number(r.selesai),
+        dibatalkan: Number(r.dibatalkan),
+        stok_kritis: stokKritisMap.get(r.unit_id) ?? 0,
+      };
+    });
+  }
+
+  async getGroupCompare(
+    unitIds: string[],
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UnitCompareRow[]> {
+    if (unitIds.length === 0) return [];
+
+    const rows = (await this.knex('orders as o')
+      .join('order_status as os', 'o.order_status_id', 'os.order_status_id')
+      .join('units as u', 'o.unit_id', 'u.unit_id')
+      .whereNull('o.deleted_at')
+      .whereIn('o.unit_id', unitIds)
+      .where('o.ordered_at', '>=', startDate)
+      .where('o.ordered_at', '<=', endDate)
+      .select(
+        'u.unit_id',
+        'u.unit_name',
+        this.knex.raw('COALESCE(SUM(o.total_amount), 0) as total_omzet'),
+        this.knex.raw('COUNT(o.order_id) as total_transaksi'),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'SELESAI' THEN 1 END) as selesai",
+        ),
+        this.knex.raw(
+          "COUNT(CASE WHEN os.order_status_code = 'DIBATALKAN' THEN 1 END) as dibatalkan",
+        ),
+      )
+      .groupBy('u.unit_id', 'u.unit_name')) as UnitKpiRaw[];
+
+    const stokKritisMap = await this.getStokKritisForUnits(unitIds);
+
+    // Ensure all requested unit IDs are returned (even if no transactions)
+    const resultMap = new Map(rows.map((r) => [r.unit_id, r]));
+    return unitIds.map((id) => {
+      const r = resultMap.get(id);
+      const stokKritis = stokKritisMap.get(id) ?? 0;
+      if (!r) {
+        return {
+          unit_id: id,
+          unit_name: 'Unit tidak ditemukan',
+          omzet: 0,
+          transaksi: 0,
+          rata_rata_order: 0,
+          selesai: 0,
+          dibatalkan: 0,
+          stok_kritis: stokKritis,
+        };
+      }
+      const totalTr = Number(r.total_transaksi);
+      const totalOmzet = Number(r.total_omzet);
+      return {
+        unit_id: r.unit_id,
+        unit_name: r.unit_name,
+        omzet: totalOmzet,
+        transaksi: totalTr,
+        rata_rata_order: totalTr > 0 ? Math.round(totalOmzet / totalTr) : 0,
+        selesai: Number(r.selesai),
+        dibatalkan: Number(r.dibatalkan),
+        stok_kritis: stokKritis,
+      };
+    });
+  }
+
+  private async getStokKritisForUnits(
+    unitIds: string[],
+  ): Promise<Map<string, number>> {
+    if (unitIds.length === 0) return new Map();
+
+    const rows = await this.knex('inventory_items as ii')
+      .join(
+        'inventory_items_units as iiu',
+        'ii.inventory_item_id',
+        'iiu.inventory_item_id',
+      )
+      .whereIn('iiu.unit_id', unitIds)
+      .whereNull('ii.deleted_at')
+      .whereNull('iiu.deleted_at')
+      .whereRaw('ii.current_stock IS NOT NULL AND ii.min_threshold IS NOT NULL')
+      .whereRaw('ii.current_stock < ii.min_threshold')
+      .select('iiu.unit_id')
+      .count<
+        Array<{ unit_id: string; count: string }>
+      >('ii.inventory_item_id as count')
+      .groupBy('iiu.unit_id');
+
+    const map = new Map<string, number>();
+    for (const r of rows) {
+      map.set(r.unit_id, parseInt(r.count, 10));
+    }
+    return map;
   }
 }

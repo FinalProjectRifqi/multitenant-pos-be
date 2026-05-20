@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import type { AppConfig } from '../../config';
 import { asyncHandler } from '../../common/middlewares/async-handler';
 import { buildPermissionMiddleware } from '../../common/middlewares/require-permission';
+import { authorizeRole } from '../../common/middlewares/authorize-role';
 import { validateRequest } from '../../common/middlewares/validate-request';
 import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
@@ -11,6 +12,7 @@ import { AnalyticsRepository } from './repositories/analytics.repository';
 import { AnalyticsUnitParamsDto } from './dto/analytics-params.dto';
 import { AnalyticsPeriodQueryDto } from './dto/analytics-period-query.dto';
 import { AnalyticsDailyInventoryQueryDto } from './dto/analytics-daily-inventory-query.dto';
+import { AnalyticsGroupCompareQueryDto } from './dto/analytics-group-compare-query.dto';
 
 interface AnalyticsRouterDeps {
   knex: Knex;
@@ -29,6 +31,28 @@ export const buildAnalyticsRouter = ({
   const repository = new AnalyticsRepository(knex);
   const service = new AnalyticsService(repository, logger);
   const controller = new AnalyticsController(service);
+
+  // ─── Group Analytics (static routes — must come before /:unitId) ────────────
+
+  // GET /v1/analytics/group/summary?period=7d
+  router.get(
+    '/group/summary',
+    requirePermission('analytics:read'),
+    authorizeRole(['GROUP_MANAGEMENT']),
+    validateRequest(AnalyticsPeriodQueryDto, 'query'),
+    asyncHandler((req, res) => controller.getGroupSummary(req, res)),
+  );
+
+  // GET /v1/analytics/group/compare?unitIds=uuid1,uuid2&period=7d
+  router.get(
+    '/group/compare',
+    requirePermission('analytics:read'),
+    authorizeRole(['GROUP_MANAGEMENT']),
+    validateRequest(AnalyticsGroupCompareQueryDto, 'query'),
+    asyncHandler((req, res) => controller.getGroupCompare(req, res)),
+  );
+
+  // ─── Unit Analytics ──────────────────────────────────────────────────────────
 
   // GET /v1/analytics/:unitId/kpi?period=7d
   router.get(

@@ -8,6 +8,8 @@ import type {
   AnalyticsPaymentsResponse,
   AnalyticsSalesTrendResponse,
   AnalyticsTopMenusResponse,
+  AnalyticsGroupSummaryResponse,
+  AnalyticsGroupCompareResponse,
 } from './models/analytics.model';
 import {
   type IAnalyticsRepository,
@@ -211,6 +213,84 @@ export class AnalyticsService {
       success: true,
       statusCode: 200,
       message: 'Berhasil mengambil penggunaan inventaris harian',
+      data,
+    };
+  }
+
+  // ===========================
+  // Group Summary (ALL mode)
+  // ===========================
+
+  async getGroupSummary(
+    period: string,
+  ): Promise<AnalyticsGroupSummaryResponse> {
+    this.logger.info({ period }, 'Fetching group analytics summary');
+
+    const { startDate, endDate } = resolveDateRange(period);
+
+    const [kpiRaw, salesTrend, topMenus, stokKritis, unitPerformance] =
+      await Promise.all([
+        this.repository.getGroupKpiRaw(startDate, endDate),
+        this.repository.getGroupSalesTrend(startDate, endDate, period),
+        this.repository.getGroupTopMenus(startDate, endDate, 5),
+        this.repository.getGroupTotalStokKritis(),
+        this.repository.getUnitPerformanceTable(startDate, endDate),
+      ]);
+
+    const totalTransaksi = Number(kpiRaw.total_transaksi);
+    const totalOmzet = Number(kpiRaw.total_omzet);
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Berhasil mengambil ringkasan analytics grup',
+      data: {
+        kpi: {
+          total_omzet: totalOmzet,
+          total_transaksi: totalTransaksi,
+          rata_rata_order:
+            totalTransaksi > 0 ? Math.round(totalOmzet / totalTransaksi) : 0,
+          selesai: Number(kpiRaw.selesai),
+          dibatalkan: Number(kpiRaw.dibatalkan),
+          stok_kritis: stokKritis,
+        },
+        sales_trend: salesTrend,
+        top_menus: topMenus,
+        unit_performance: unitPerformance,
+      },
+    };
+  }
+
+  // ===========================
+  // Group Compare
+  // ===========================
+
+  async getGroupCompare(
+    unitIds: string[],
+    period: string,
+  ): Promise<AnalyticsGroupCompareResponse> {
+    this.logger.info({ unitIds, period }, 'Fetching group compare analytics');
+
+    if (unitIds.length === 0) {
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Berhasil mengambil data perbandingan unit',
+        data: [],
+      };
+    }
+
+    const { startDate, endDate } = resolveDateRange(period);
+    const data = await this.repository.getGroupCompare(
+      unitIds,
+      startDate,
+      endDate,
+    );
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Berhasil mengambil data perbandingan unit',
       data,
     };
   }

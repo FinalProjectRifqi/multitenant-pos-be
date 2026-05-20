@@ -1,7 +1,6 @@
 // analytics.service.spec.ts
 import type { Logger } from 'pino';
 import { ErrorCodes } from '../../../common/errors/error-codes';
-import type { IAnalyticsRepository } from '../repositories/analytics.repository';
 import { AnalyticsService } from '../analytics.service';
 import type {
   DailyInventoryRow,
@@ -9,7 +8,10 @@ import type {
   PaymentHistoryRow,
   SalesTrendPoint,
   TopMenuRow,
+  UnitCompareRow,
+  UnitPerformanceRow,
 } from '../models/analytics.model';
+import type { IAnalyticsRepository } from '../repositories/analytics.repository';
 
 // ===========================
 // Helpers
@@ -26,6 +28,12 @@ const createMockRepository = (): jest.Mocked<IAnalyticsRepository> => ({
   getRecentPayments: jest.fn(),
   getInventoryStatus: jest.fn(),
   getDailyInventory: jest.fn(),
+  getGroupKpiRaw: jest.fn(),
+  getGroupSalesTrend: jest.fn(),
+  getGroupTopMenus: jest.fn(),
+  getGroupTotalStokKritis: jest.fn(),
+  getUnitPerformanceTable: jest.fn(),
+  getGroupCompare: jest.fn(),
 });
 
 const createMockLogger = (): jest.Mocked<Logger> =>
@@ -437,6 +445,127 @@ describe('AnalyticsService', () => {
       const result = await service.getDailyInventory(UNIT_ID, '2026-05-19');
 
       expect(result.data).toEqual([]);
+    });
+  });
+
+  // ─── getGroupSummary ────────────────────────────────────────────────────────
+  describe('getGroupSummary', () => {
+    const makeGroupKpiRaw = () => ({
+      total_omzet: '10000000',
+      total_transaksi: '100',
+      selesai: '95',
+      dibatalkan: '5',
+    });
+
+    const makeUnitPerformanceRow = (): UnitPerformanceRow => ({
+      unit_id: 'u1',
+      unit_name: 'Unit A',
+      omzet: 5000000,
+      transaksi: 50,
+      rata_rata_order: 100000,
+      selesai: 48,
+      dibatalkan: 2,
+      stok_kritis: 0,
+    });
+
+    it('returns correct summary response structure', async () => {
+      mockRepository.getGroupKpiRaw.mockResolvedValue(makeGroupKpiRaw());
+      mockRepository.getGroupSalesTrend.mockResolvedValue([]);
+      mockRepository.getGroupTopMenus.mockResolvedValue([]);
+      mockRepository.getGroupTotalStokKritis.mockResolvedValue(3);
+      mockRepository.getUnitPerformanceTable.mockResolvedValue([
+        makeUnitPerformanceRow(),
+      ]);
+
+      const result = await service.getGroupSummary('7d');
+
+      expect(result.success).toBe(true);
+      expect(result.statusCode).toBe(200);
+      expect(result.data.kpi.total_omzet).toBe(10000000);
+      expect(result.data.kpi.total_transaksi).toBe(100);
+      expect(result.data.kpi.rata_rata_order).toBe(100000);
+      expect(result.data.kpi.selesai).toBe(95);
+      expect(result.data.kpi.dibatalkan).toBe(5);
+      expect(result.data.kpi.stok_kritis).toBe(3);
+      expect(result.data.unit_performance).toHaveLength(1);
+    });
+
+    it('computes rata_rata_order as 0 when no transactions', async () => {
+      mockRepository.getGroupKpiRaw.mockResolvedValue({
+        total_omzet: '0',
+        total_transaksi: '0',
+        selesai: '0',
+        dibatalkan: '0',
+      });
+      mockRepository.getGroupSalesTrend.mockResolvedValue([]);
+      mockRepository.getGroupTopMenus.mockResolvedValue([]);
+      mockRepository.getGroupTotalStokKritis.mockResolvedValue(0);
+      mockRepository.getUnitPerformanceTable.mockResolvedValue([]);
+
+      const result = await service.getGroupSummary('7d');
+
+      expect(result.data.kpi.rata_rata_order).toBe(0);
+    });
+
+    it('calls all repository methods in parallel', async () => {
+      mockRepository.getGroupKpiRaw.mockResolvedValue(makeGroupKpiRaw());
+      mockRepository.getGroupSalesTrend.mockResolvedValue([]);
+      mockRepository.getGroupTopMenus.mockResolvedValue([]);
+      mockRepository.getGroupTotalStokKritis.mockResolvedValue(0);
+      mockRepository.getUnitPerformanceTable.mockResolvedValue([]);
+
+      await service.getGroupSummary('30d');
+
+      expect(mockRepository.getGroupKpiRaw).toHaveBeenCalledTimes(1);
+      expect(mockRepository.getGroupSalesTrend).toHaveBeenCalledTimes(1);
+      expect(mockRepository.getGroupTopMenus).toHaveBeenCalledTimes(1);
+      expect(mockRepository.getGroupTotalStokKritis).toHaveBeenCalledTimes(1);
+      expect(mockRepository.getUnitPerformanceTable).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── getGroupCompare ────────────────────────────────────────────────────────
+  describe('getGroupCompare', () => {
+    const makeCompareRow = (): UnitCompareRow => ({
+      unit_id: 'u1',
+      unit_name: 'Unit A',
+      omzet: 1000000,
+      transaksi: 10,
+      rata_rata_order: 100000,
+      selesai: 9,
+      dibatalkan: 1,
+      stok_kritis: 0,
+    });
+
+    it('returns compare data for provided unit IDs', async () => {
+      mockRepository.getGroupCompare.mockResolvedValue([makeCompareRow()]);
+
+      const result = await service.getGroupCompare(['u1'], '7d');
+
+      expect(result.success).toBe(true);
+      expect(result.statusCode).toBe(200);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].unit_id).toBe('u1');
+    });
+
+    it('returns empty data for empty unitIds without calling repository', async () => {
+      const result = await service.getGroupCompare([], '7d');
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual([]);
+      expect(mockRepository.getGroupCompare).not.toHaveBeenCalled();
+    });
+
+    it('passes parsed unitIds array to repository', async () => {
+      mockRepository.getGroupCompare.mockResolvedValue([]);
+
+      await service.getGroupCompare(['u1', 'u2'], '30d');
+
+      expect(mockRepository.getGroupCompare).toHaveBeenCalledWith(
+        ['u1', 'u2'],
+        expect.any(Date),
+        expect.any(Date),
+      );
     });
   });
 });
