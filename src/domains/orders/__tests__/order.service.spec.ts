@@ -1,4 +1,13 @@
 import type { Logger } from 'pino';
+import type { Knex } from 'knex';
+import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
+import type { AppConfig } from '../../../config';
+import type { JwtTokenPayload } from '../../auth/models/auth.model';
+import type {
+  OrderItemRow,
+  OrderRow,
+  OrderTransactionHistoryRow,
+} from '../models/order.model';
 import { DomainErrorCodes } from '../../../common/errors/error-codes-domain';
 import type { AppConfig } from '../../../config';
 import type { JwtTokenPayload } from '../../auth/models/auth.model';
@@ -11,6 +20,8 @@ const OTHER_UNIT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const USER_ID = '660f9511-f3ac-42e5-b827-557766551111';
 const ORDER_ID = 'a3bb4c2e-f123-4d56-b789-000000000010';
 const PAYMENT_ID = 'f1cc5d3f-a234-4e67-b890-999999999999';
+const ORDER_TYPE_ID = '7a9e8400-e29b-41d4-a716-446655440000';
+const MENU_ITEM_ID = 'c2dd6e4d-a345-4f78-9901-222222222222';
 
 const createMockOrderRepository = (): jest.Mocked<IOrderRepository> =>
   ({
@@ -67,6 +78,45 @@ const createJwtPayload = (
   ...overrides,
 });
 
+const createOrderRow = (overrides?: Partial<OrderRow>): OrderRow => ({
+  order_id: ORDER_ID,
+  unit_id: UNIT_ID,
+  user_id: USER_ID,
+  order_number: 'ORD-A1B2C3',
+  table_number: null,
+  subtotal: 20000,
+  tax_amount: 0,
+  total_amount: 20000,
+  notes: null,
+  ordered_at: new Date('2025-01-15T10:00:00.000Z'),
+  completed_at: null,
+  created_at: new Date('2025-01-15T10:00:00.000Z'),
+  updated_at: new Date('2025-01-15T10:00:00.000Z'),
+  deleted_at: null,
+  customer_name: 'Budi',
+  order_type_id: ORDER_TYPE_ID,
+  order_type_name: 'Takeaway',
+  order_status_id: 'pending-status-uuid',
+  order_status_name: 'baru masuk',
+  order_status_code: 'pending',
+  ...overrides,
+});
+
+const createOrderItemRow = (
+  overrides?: Partial<OrderItemRow>,
+): OrderItemRow => ({
+  order_item_id: 'b1cc5d3f-a234-4e67-b890-111111111111',
+  order_id: ORDER_ID,
+  menu_item_id: MENU_ITEM_ID,
+  menu_item_name: 'Nasi Goreng',
+  quantity: 2,
+  item_price: 10000,
+  notes: null,
+  created_at: new Date('2025-01-15T10:00:00.000Z'),
+  updated_at: new Date('2025-01-15T10:00:00.000Z'),
+  ...overrides,
+});
+
 const createTransactionHistoryRow = (
   overrides?: Partial<OrderTransactionHistoryRow>,
 ): OrderTransactionHistoryRow => ({
@@ -90,6 +140,81 @@ const createTransactionHistoryRow = (
   payment_method: 'cashless',
   paid_at: new Date('2025-01-15T10:15:00.000Z'),
   ...overrides,
+});
+
+describe('OrderService createOrder', () => {
+  let service: OrderService;
+  let repository: jest.Mocked<IOrderRepository>;
+  let logger: jest.Mocked<Logger>;
+
+  const validDto = {
+    order_type_id: ORDER_TYPE_ID,
+    customer_name: 'Budi',
+    items: [
+      {
+        menu_item_id: MENU_ITEM_ID,
+        quantity: 2,
+        item_price: 10000,
+      },
+    ],
+    subtotal: 20000,
+    tax_amount: 0,
+    total_amount: 20000,
+  };
+
+  beforeEach(() => {
+    repository = createMockOrderRepository();
+    logger = createMockLogger();
+    service = new OrderService(repository, createMockConfig(), logger);
+
+    repository.findUnitById.mockResolvedValue({
+      unit_id: UNIT_ID,
+      unit_name: 'Unit A',
+    });
+    repository.findOrderTypeById.mockResolvedValue({
+      order_type_id: ORDER_TYPE_ID,
+      order_type_name: 'Takeaway',
+    });
+    repository.findMenuItemsByIds.mockResolvedValue([
+      {
+        menu_item_id: MENU_ITEM_ID,
+        menu_item_name: 'Nasi Goreng',
+        item_price: 10000,
+        is_available: true,
+      },
+    ]);
+    repository.findOrderItemsByOrderId.mockResolvedValue([
+      createOrderItemRow(),
+    ]);
+    repository.createOrderItems.mockResolvedValue();
+    repository.transaction.mockImplementation(
+      async (callback: (trx: Knex.Transaction) => Promise<unknown>) =>
+        callback({} as Knex.Transaction),
+    );
+  });
+
+  it('generates compact random order numbers without using per-unit counters', async () => {
+    const createdOrderNumbers: string[] = [];
+
+    repository.create.mockImplementation(async (data) => {
+      createdOrderNumbers.push(data.order_number);
+      return { order_id: ORDER_ID };
+    });
+    repository.findById.mockImplementation(async (unitId) =>
+      createOrderRow({
+        unit_id: unitId,
+        order_number: createdOrderNumbers[createdOrderNumbers.length - 1],
+      }),
+    );
+
+    await service.createOrder(UNIT_ID, USER_ID, validDto);
+    await service.createOrder(OTHER_UNIT_ID, USER_ID, validDto);
+
+    expect(repository.countOrdersToday).not.toHaveBeenCalled();
+    expect(createdOrderNumbers).toHaveLength(2);
+    expect(createdOrderNumbers[0]).toMatch(/^ORD-[A-Z0-9]{6}$/);
+    expect(createdOrderNumbers[1]).toMatch(/^ORD-[A-Z0-9]{6}$/);
+  });
 });
 
 describe('OrderService transaction history', () => {

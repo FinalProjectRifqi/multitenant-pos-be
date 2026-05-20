@@ -69,7 +69,7 @@ const orderListItemSchema = {
       format: 'uuid',
       example: 'a3bb4c2e-f123-4d56-b789-000000000010',
     },
-    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
     customer_name: { type: 'string', example: 'Budi Santoso' },
     table_number: { type: 'string', nullable: true, example: '5' },
     order_type_id: {
@@ -101,7 +101,7 @@ const transactionHistoryItemSchema = {
       format: 'uuid',
       example: 'a3bb4c2e-f123-4d56-b789-000000000010',
     },
-    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
     business_unit_id: {
       type: 'string',
       format: 'uuid',
@@ -145,6 +145,7 @@ const transactionHistoryItemSchema = {
         },
         reference_number: {
           type: 'string',
+          example: 'PAY-ORD-A1B2C3-20250115104500',
           example: 'PAY-ORD-20250115-0001-20250115104500',
         },
         payment_status: { type: 'string', example: 'paid' },
@@ -183,7 +184,7 @@ const orderDetailSchema = {
       format: 'uuid',
       example: '660f9511-f3ac-52e5-b827-557766551111',
     },
-    order_number: { type: 'string', example: 'ORD-20250115-0001' },
+    order_number: { type: 'string', example: 'ORD-A1B2C3' },
     customer_name: { type: 'string', example: 'Budi Santoso' },
     table_number: { type: 'string', nullable: true, example: '5' },
     notes: {
@@ -239,7 +240,7 @@ const paymentResponseSchema = {
     },
     reference_number: {
       type: 'string',
-      example: 'PAY-ORD-20250115-0001-20250115103045',
+      example: 'PAY-ORD-A1B2C3-20250115103045',
     },
     amount: { type: 'number', example: 55000 },
     payment_status: {
@@ -1791,13 +1792,13 @@ export const ordersSwaggerDoc = {
                 properties: {
                   reference_number: {
                     type: 'string',
-                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                    example: 'PAY-ORD-A1B2C3-20250115103045',
                     description:
                       'Opsional jika order_id dikirim. Gunakan nilai `payment.reference_number` dari response create cashless payment.',
                   },
                   order_id: {
                     type: 'string',
-                    example: 'PAY-ORD-20250115-0001-20250115103045',
+                    example: 'PAY-ORD-A1B2C3-20250115103045',
                     description:
                       'Alternatif untuk reference_number. Midtrans Core API biasanya mengirim order_id.',
                   },
