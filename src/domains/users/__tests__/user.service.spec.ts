@@ -130,19 +130,23 @@ describe('UserService', () => {
       );
     });
 
-    it('passes business unit and role filters when provided', async () => {
+    it('passes business_unit_id filter when provided', async () => {
       mockRepository.findAll.mockResolvedValueOnce({ data: [], total: 0 });
 
-      await service.listUsers({
-        business_unit_id: VALID_UUID,
-        role_id: VALID_UUID_2,
-      });
+      await service.listUsers({ business_unit_id: VALID_UUID });
 
       expect(mockRepository.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({
-          businessUnitId: VALID_UUID,
-          roleId: VALID_UUID_2,
-        }),
+        expect.objectContaining({ businessUnitId: VALID_UUID }),
+      );
+    });
+
+    it('passes role_id filter when provided', async () => {
+      mockRepository.findAll.mockResolvedValueOnce({ data: [], total: 0 });
+
+      await service.listUsers({ role_id: VALID_UUID_2 });
+
+      expect(mockRepository.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ roleId: VALID_UUID_2 }),
       );
     });
 
@@ -231,6 +235,10 @@ describe('UserService', () => {
         user_id: VALID_UUID,
         username: 'budi.santoso',
       });
+      mockRepository.create.mockResolvedValue({
+        user_id: VALID_UUID,
+        username: 'budi.santoso',
+      });
       mockRepository.createUserUnit.mockResolvedValue();
     });
 
@@ -311,6 +319,33 @@ describe('UserService', () => {
         }),
         VALID_UUID,
       );
+    });
+
+    it('throws 400 when non-group role is created without business_unit_id', async () => {
+      await expect(
+        service.createUser({ ...validDto, business_unit_id: null }),
+      ).rejects.toMatchObject({
+        code: ErrorCodes.ValidationFailed,
+        status: 400,
+      });
+
+      expect(mockRepository.findUnitById).not.toHaveBeenCalled();
+      expect(mockRepository.create).not.toHaveBeenCalled();
+      expect(mockRepository.createWithUnit).not.toHaveBeenCalled();
+    });
+
+    it('creates group-management user without unit assignment when business_unit_id is null', async () => {
+      mockRepository.findRoleById.mockResolvedValueOnce({
+        role_id: VALID_UUID_2,
+        role_code: 'GROUP_MANAGEMENT',
+      });
+
+      await service.createUser({ ...validDto, business_unit_id: null });
+
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ username: 'budi.santoso' }),
+      );
+      expect(mockRepository.createWithUnit).not.toHaveBeenCalled();
     });
 
     it('throws 500 on unexpected error', async () => {
@@ -541,6 +576,87 @@ describe('UserService', () => {
         VALID_UUID,
         VALID_UUID_2,
       );
+    });
+
+    it('throws 400 when non-group role clears business_unit_id', async () => {
+      await expect(
+        service.updateUser(
+          VALID_UUID,
+          { full_name: 'Nama Baru', business_unit_id: null },
+          REQUEST_USER_ID,
+        ),
+      ).rejects.toMatchObject({
+        code: ErrorCodes.ValidationFailed,
+        status: 400,
+      });
+
+      expect(mockRepository.findUnitById).not.toHaveBeenCalled();
+      expect(mockRepository.findActiveUserUnits).not.toHaveBeenCalled();
+      expect(mockRepository.replaceUserUnit).not.toHaveBeenCalled();
+      expect(mockRepository.createUserUnit).not.toHaveBeenCalled();
+      expect(mockRepository.revokeUserUnits).not.toHaveBeenCalled();
+    });
+
+    it('revokes unit assignments when group-management role clears business_unit_id', async () => {
+      mockRepository.findById.mockResolvedValueOnce(
+        createUserWithDetails({ role_code: 'GROUP_MANAGEMENT' }),
+      );
+
+      const result = await service.updateUser(
+        VALID_UUID,
+        { full_name: 'Nama Baru', business_unit_id: null },
+        REQUEST_USER_ID,
+      );
+
+      expect(result.statusCode).toBe(200);
+      expect(mockRepository.revokeUserUnits).toHaveBeenCalledWith(VALID_UUID);
+    });
+
+    it('revokes unit assignments when role changes to group-management role', async () => {
+      mockRepository.findRoleById.mockResolvedValueOnce({
+        role_id: VALID_UUID_2,
+        role_code: 'GROUP_MANAGEMENT',
+      });
+
+      const result = await service.updateUser(
+        VALID_UUID,
+        { role_id: VALID_UUID_2 },
+        REQUEST_USER_ID,
+      );
+
+      expect(result.statusCode).toBe(200);
+      expect(mockRepository.findUnitById).not.toHaveBeenCalled();
+      expect(mockRepository.findActiveUserUnits).not.toHaveBeenCalled();
+      expect(mockRepository.replaceUserUnit).not.toHaveBeenCalled();
+      expect(mockRepository.createUserUnit).not.toHaveBeenCalled();
+      expect(mockRepository.revokeUserUnits).toHaveBeenCalledWith(VALID_UUID);
+    });
+
+    it('throws 400 when role changes to non-group role and user has no business unit', async () => {
+      mockRepository.findById.mockResolvedValueOnce(
+        createUserWithDetails({
+          role_code: 'GROUP_MANAGEMENT',
+          business_units: [],
+        }),
+      );
+      mockRepository.findRoleById.mockResolvedValueOnce({
+        role_id: VALID_UUID_2,
+        role_code: 'UNIT_MANAGER',
+      });
+
+      await expect(
+        service.updateUser(
+          VALID_UUID,
+          { role_id: VALID_UUID_2 },
+          REQUEST_USER_ID,
+        ),
+      ).rejects.toMatchObject({
+        code: ErrorCodes.ValidationFailed,
+        status: 400,
+      });
+
+      expect(mockRepository.update).not.toHaveBeenCalled();
+      expect(mockRepository.revokeUserUnits).not.toHaveBeenCalled();
     });
 
     it('maps DB unique violation during update to 409 conflict', async () => {

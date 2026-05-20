@@ -139,6 +139,34 @@ describe('User routes auth matrix', () => {
     expect(listUsersMock).toHaveBeenCalledTimes(1);
   });
 
+  it('allows GET / with business_unit_id filter when user has user:read', async () => {
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: createValidPayload(['user:read']),
+    });
+    const app = createApp();
+
+    const res = await request(app)
+      .get(`/users?business_unit_id=${VALID_UUID}`)
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(listUsersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows GET / with role_id filter when user has user:read', async () => {
+    jwtVerifyMock.mockResolvedValueOnce({
+      payload: createValidPayload(['user:read']),
+    });
+    const app = createApp();
+
+    const res = await request(app)
+      .get(`/users?role_id=${VALID_UUID}`)
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(200);
+    expect(listUsersMock).toHaveBeenCalledTimes(1);
+  });
+
   it('allows GET /stats when user has user:read', async () => {
     jwtVerifyMock.mockResolvedValueOnce({
       payload: createValidPayload(['user:read']),

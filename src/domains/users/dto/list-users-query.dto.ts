@@ -33,7 +33,14 @@ export class ListUsersQueryDto {
 
   @IsOptional()
   @IsIn(
-    ['full_name', 'username', 'business_unit_name', 'role_name', 'status', 'last_login'],
+    [
+      'full_name',
+      'username',
+      'business_unit_name',
+      'role_name',
+      'status',
+      'last_login',
+    ],
     {
       message:
         'sortBy harus salah satu dari: full_name, username, business_unit_name, role_name, status, last_login',

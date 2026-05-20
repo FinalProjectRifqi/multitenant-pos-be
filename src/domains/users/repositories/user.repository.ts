@@ -43,6 +43,11 @@ export interface UpdateUserData {
   is_active?: boolean;
 }
 
+export interface RoleLookup {
+  role_id: string;
+  role_code?: string | null;
+}
+
 interface RawBusinessUnitRow {
   user_id: string;
   business_unit_id: string;
@@ -63,7 +68,7 @@ export interface IUserRepository {
     email: string,
     excludeUserId?: string,
   ): Promise<{ user_id: string } | null>;
-  findRoleById(roleId: string): Promise<{ role_id: string } | null>;
+  findRoleById(roleId: string): Promise<RoleLookup | null>;
   findUnitById(unitId: string): Promise<{ unit_id: string } | null>;
   findActiveUserUnits(userId: string): Promise<{ unit_id: string }[]>;
   create(data: CreateUserData): Promise<{ user_id: string; username: string }>;
@@ -119,15 +124,10 @@ export class UserRepository implements IUserRepository {
       if (businessUnitId) {
         query.whereExists(function () {
           this.select(1)
-            .from('user_units as uu_filter')
-            .join('units as un_filter', function () {
-              this.on('un_filter.unit_id', '=', 'uu_filter.unit_id').andOnNull(
-                'un_filter.deleted_at',
-              );
-            })
-            .whereRaw('uu_filter.user_id = u.user_id')
-            .where('uu_filter.unit_id', businessUnitId)
-            .whereNull('uu_filter.deleted_at');
+            .from('user_units as uuf')
+            .whereRaw('uuf.user_id = u.user_id')
+            .where('uuf.unit_id', businessUnitId)
+            .whereNull('uuf.deleted_at');
         });
       }
 
@@ -163,7 +163,8 @@ export class UserRepository implements IUserRepository {
         ) ${safeSortType} NULLS LAST`,
       );
     } else {
-      const col = SORT_COLUMN_MAP[sortBy as Exclude<SortByColumn, 'business_unit_name'>];
+      const col =
+        SORT_COLUMN_MAP[sortBy as Exclude<SortByColumn, 'business_unit_name'>];
       if (!col) {
         throw new Error(`Unsupported sortBy column: ${sortBy}`);
       }
@@ -308,12 +309,12 @@ export class UserRepository implements IUserRepository {
     return row ?? null;
   }
 
-  async findRoleById(roleId: string): Promise<{ role_id: string } | null> {
+  async findRoleById(roleId: string): Promise<RoleLookup | null> {
     const row = await this.db('roles')
-      .select('role_id')
+      .select('role_id', 'role_code')
       .where('role_id', roleId)
       .whereNull('deleted_at')
-      .first<{ role_id: string } | undefined>();
+      .first<RoleLookup | undefined>();
 
     return row ?? null;
   }

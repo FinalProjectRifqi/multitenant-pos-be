@@ -6,6 +6,7 @@ import {
   IsUUID,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -37,9 +38,10 @@ export class CreateUserDto {
   @IsNotEmpty({ message: 'Role tidak boleh kosong' })
   role_id!: string;
 
+  @ValidateIf((_object, value) => value !== null)
   @IsUUID('4', { message: 'business_unit_id harus berupa UUID yang valid' })
   @IsNotEmpty({ message: 'Unit usaha tidak boleh kosong' })
-  business_unit_id!: string;
+  business_unit_id!: string | null;
 
   @IsString()
   @IsNotEmpty({ message: 'Password tidak boleh kosong' })
