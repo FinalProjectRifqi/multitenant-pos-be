@@ -1,15 +1,25 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDateString,
   IsIn,
   IsInt,
   IsOptional,
+  IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
 export class ListTransactionHistoryQueryDto {
+  @IsOptional()
+  @IsString({ message: 'search harus berupa string' })
+  @MaxLength(255, { message: 'search maksimal 255 karakter' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
+  search?: string;
+
   @IsOptional()
   @IsUUID('4', { message: 'status_id harus berupa UUID yang valid' })
   status_id?: string;

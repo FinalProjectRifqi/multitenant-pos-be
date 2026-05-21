@@ -19,6 +19,7 @@ export const DomainErrorCodes = {
   AuthForbidden: 'AUTH_FORBIDDEN',
   MenuCategoryNotFound: 'MENU_CATEGORY_NOT_FOUND',
   UnitNotFound: 'UNIT_NOT_FOUND',
+  UnitConflict: 'UNIT_CONFLICT',
   UnitInvalidPhone: 'UNIT_INVALID_PHONE',
   UserNotFound: 'USER_NOT_FOUND',
   UserUsernameConflict: 'USER_USERNAME_CONFLICT',

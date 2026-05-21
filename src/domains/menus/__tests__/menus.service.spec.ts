@@ -520,7 +520,35 @@ describe('MenuService', () => {
       ).rejects.toMatchObject({
         code: DomainErrorCodes.MenuConflict,
         status: 409,
+        details: [
+          expect.objectContaining({
+            property: 'menu_name',
+            constraints: expect.objectContaining({
+              unique: 'Nama menu sudah digunakan di unit usaha ini',
+            }),
+          }),
+        ],
       });
+    });
+
+    it('allows the same name when it only exists in another unit', async () => {
+      const dto = {
+        ...validDto,
+        menu_name: 'Es Jeruk',
+      };
+
+      await expect(service.createMenu(BUSINESS_ID, dto)).resolves.toMatchObject({
+        statusCode: 201,
+      });
+
+      expect(mockRepository.findByName).toHaveBeenCalledWith(
+        'Es Jeruk',
+        BUSINESS_ID,
+      );
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ menu_item_name: 'Es Jeruk' }),
+        BUSINESS_ID,
+      );
     });
 
     it('throws 400 MENU_INVALID_IMAGE_TYPE when file is not an image', async () => {
@@ -815,6 +843,14 @@ describe('MenuService', () => {
       ).rejects.toMatchObject({
         code: DomainErrorCodes.MenuConflict,
         status: 409,
+        details: [
+          expect.objectContaining({
+            property: 'menu_name',
+            constraints: expect.objectContaining({
+              unique: 'Nama menu sudah digunakan di unit usaha ini',
+            }),
+          }),
+        ],
       });
     });
 

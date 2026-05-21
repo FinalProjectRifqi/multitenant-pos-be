@@ -763,6 +763,14 @@ export const ordersSwaggerDoc = {
         parameters: [
           unitIdParam,
           {
+            name: 'search',
+            in: 'query',
+            required: false,
+            description:
+              'Kata kunci pencarian pada nomor order, nama pelanggan, nomor meja, nama unit, tipe order, status order, atau reference payment.',
+            schema: { type: 'string', example: 'Budi' },
+          },
+          {
             name: 'status_id',
             in: 'query',
             required: false,

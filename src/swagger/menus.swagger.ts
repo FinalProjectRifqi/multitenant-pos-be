@@ -233,6 +233,23 @@ const menuConflictResponse = {
         type: 'object',
         properties: {
           success: { type: 'boolean', example: false },
+          code: { type: 'string', example: 'MENU_CONFLICT' },
+          message: {
+            type: 'string',
+            example: 'Nama menu sudah digunakan di unit usaha ini',
+          },
+          details: {
+            type: 'array',
+            items: { type: 'object' },
+            example: [
+              {
+                property: 'menu_name',
+                constraints: {
+                  unique: 'Nama menu sudah digunakan di unit usaha ini',
+                },
+              },
+            ],
+          },
           error: {
             type: 'object',
             properties: {
@@ -240,6 +257,10 @@ const menuConflictResponse = {
               message: {
                 type: 'string',
                 example: 'Nama menu sudah digunakan di unit usaha ini',
+              },
+              details: {
+                type: 'array',
+                items: { type: 'object' },
               },
             },
           },

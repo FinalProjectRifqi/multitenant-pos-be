@@ -37,6 +37,9 @@ export const createErrorHandler =
 
     res.status(appError.status).json({
       success: false,
+      code: appError.code,
+      message: appError.message,
+      details: appError.details,
       error: {
         code: appError.code,
         message: appError.message,

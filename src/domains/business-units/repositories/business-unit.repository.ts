@@ -36,6 +36,7 @@ export interface IBusinessUnitRepository {
     params: FindAllParams,
   ): Promise<{ data: BusinessUnit[]; total: number }>;
   findById(id: string): Promise<BusinessUnit | null>;
+  findByName(name: string, excludeId?: string): Promise<BusinessUnit | null>;
   getStats(): Promise<BusinessUnitStats>;
   create(data: CreateUnitData): Promise<BusinessUnit>;
   update(id: string, data: UpdateUnitData): Promise<BusinessUnit>;
@@ -110,6 +111,32 @@ export class BusinessUnitRepository implements IBusinessUnitRepository {
       .whereNull('deleted_at')
       .first<BusinessUnit | undefined>();
 
+    return row ?? null;
+  }
+
+  async findByName(
+    name: string,
+    excludeId?: string,
+  ): Promise<BusinessUnit | null> {
+    const query = this.db('units')
+      .select(
+        'unit_id',
+        'unit_name',
+        'unit_address',
+        'phone_number',
+        'status',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+      )
+      .whereRaw('LOWER(TRIM(unit_name)) = LOWER(TRIM(?))', [name])
+      .whereNull('deleted_at');
+
+    if (excludeId) {
+      query.whereNot('unit_id', excludeId);
+    }
+
+    const row = await query.first<BusinessUnit | undefined>();
     return row ?? null;
   }
 
