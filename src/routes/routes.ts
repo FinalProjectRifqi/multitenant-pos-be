@@ -51,7 +51,9 @@ export const buildApiRouter = ({
     '/menu-categories',
     buildMenuCategoryRouter({ knex, config, logger }),
   );
-  router.use('/inventaris', buildInventarisRouter({ knex, config, logger }));
+  const inventarisRouter = buildInventarisRouter({ knex, config, logger });
+  router.use('/inventaris', inventarisRouter);
+  router.use('/inventory', inventarisRouter);
   router.use('/orders', buildOrderRouter({ knex, config, logger }));
   router.use('/order-types', buildOrderTypeRouter({ knex, config, logger }));
   router.use(

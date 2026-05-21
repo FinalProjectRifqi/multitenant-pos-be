@@ -28,14 +28,79 @@ export interface InventoryTransaction {
   user_id: string;
   inventory_item_id: string;
   inventory_item_name: string;
-  transaction_type: 'in' | 'out' | 'adjustment';
+  transaction_type:
+    | 'in'
+    | 'out'
+    | 'adjustment'
+    | 'RESTOCK'
+    | 'DAILY_USAGE'
+    | 'WASTE'
+    | 'MANUAL_ADJUSTMENT';
   quantity_changed: number;
   quantity_before: number;
   quantity_after: number;
   notes: string | null;
+  reference_type?: string | null;
+  reference_id?: string | null;
   transacted_at: Date;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface DailyInventoryPlan {
+  daily_inventory_plan_id: string;
+  unit_id: string;
+  date: string;
+  inventory_item_id: string;
+  inventory_item_name: string;
+  planned_usage_qty: number;
+  unit: string;
+  notes: string | null;
+  created_by: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface DailyInventoryRealization {
+  daily_inventory_realization_id: string;
+  unit_id: string;
+  date: string;
+  inventory_item_id: string;
+  inventory_item_name: string;
+  daily_inventory_plan_id: string;
+  planned_usage_qty: number;
+  actual_usage_qty: number;
+  waste_qty: number;
+  remaining_qty: number | null;
+  variance_qty: number;
+  notes: string | null;
+  status: 'SUBMITTED' | 'DRAFT';
+  submitted_by: string;
+  submitted_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface DailyUsageReportRow {
+  date: string;
+  inventory_item_id: string;
+  inventory_item_name: string;
+  unit: string;
+  planned_usage_qty: number;
+  actual_usage_qty: number | null;
+  waste_qty: number | null;
+  variance_qty: number | null;
+  status: string | null;
+}
+
+export interface InventoryVarianceReportRow {
+  inventory_item_id: string;
+  inventory_item_name: string;
+  unit: string;
+  planned_usage_qty: number;
+  actual_usage_qty: number;
+  waste_qty: number;
+  variance_qty: number;
 }
 
 export interface PaginationMeta {
@@ -86,4 +151,54 @@ export interface InventoryTransactionCreateResponse {
   statusCode: number;
   message: string;
   data: InventoryTransaction;
+}
+
+export interface DailyInventoryPlanListResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: DailyInventoryPlan[];
+  meta: PaginationMeta;
+}
+
+export interface DailyInventoryPlanDetailResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: DailyInventoryPlan;
+}
+
+export interface DailyInventoryPlanDeleteResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+}
+
+export interface DailyInventoryRealizationListResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: DailyInventoryRealization[];
+  meta: PaginationMeta;
+}
+
+export interface DailyInventoryRealizationDetailResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: DailyInventoryRealization;
+}
+
+export interface DailyUsageReportResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: DailyUsageReportRow[];
+}
+
+export interface InventoryVarianceReportResponse {
+  success: true;
+  statusCode: number;
+  message: string;
+  data: InventoryVarianceReportRow[];
 }

@@ -32,3 +32,59 @@ export const inventoryInsufficientStockError = (details?: unknown): AppError =>
     status: 400,
     details,
   });
+
+export const inventoryUnitMismatchError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.InventoryUnitMismatch,
+    message: 'Unit bahan harus sama dengan unit inventaris',
+    status: 400,
+    details,
+  });
+
+export const dailyInventoryPlanNotFoundError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.DailyInventoryPlanNotFound,
+    message: 'Rencana penggunaan inventaris harian tidak ditemukan',
+    status: 404,
+    details,
+  });
+
+export const dailyInventoryPlanConflictError = (details?: unknown): AppError =>
+  new AppError({
+    code: DomainErrorCodes.DailyInventoryPlanConflict,
+    message:
+      'Rencana penggunaan untuk tanggal dan item inventaris ini sudah ada',
+    status: 409,
+    details,
+  });
+
+export const dailyInventoryPlanAlreadyRealizedError = (
+  details?: unknown,
+): AppError =>
+  new AppError({
+    code: DomainErrorCodes.DailyInventoryPlanAlreadyRealized,
+    message: 'Rencana inventaris harian sudah memiliki realisasi',
+    status: 409,
+    details,
+  });
+
+export const dailyInventoryRealizationNotFoundError = (
+  details?: unknown,
+): AppError =>
+  new AppError({
+    code: DomainErrorCodes.DailyInventoryRealizationNotFound,
+    message: 'Realisasi inventaris harian tidak ditemukan',
+    status: 404,
+    details,
+  });
+
+export const dailyInventoryRealizationConflictError = (
+  details?: unknown,
+): AppError =>
+  new AppError({
+    code: DomainErrorCodes.DailyInventoryRealizationConflict,
+    message:
+      'Realisasi untuk tanggal dan item inventaris ini sudah pernah disubmit',
+    status: 409,
+    details,
+  });

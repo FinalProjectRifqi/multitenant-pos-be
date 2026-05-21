@@ -3,21 +3,41 @@ import { AppError } from '../../common/errors/app-error';
 import { ErrorCodes } from '../../common/errors/error-codes';
 import type { CreateInventarisItemDto } from './dto/create-inventaris-item.dto';
 import type { CreateInventoryTransactionDto } from './dto/create-inventory-transaction.dto';
+import type {
+  CreateDailyInventoryPlanDto,
+  ListDailyInventoryPlanQueryDto,
+  UpdateDailyInventoryPlanDto,
+} from './dto/daily-inventory-plan.dto';
+import type {
+  CreateDailyInventoryRealizationDto,
+  ListDailyInventoryRealizationQueryDto,
+} from './dto/daily-inventory-realization.dto';
 import type { ListInventarisQueryDto } from './dto/list-inventaris-query.dto';
 import type { ListInventoryTransactionsQueryDto } from './dto/list-inventory-transactions-query.dto';
 import type { UpdateInventarisItemDto } from './dto/update-inventaris-item.dto';
 import {
+  dailyInventoryPlanAlreadyRealizedError,
+  dailyInventoryPlanNotFoundError,
+  dailyInventoryRealizationNotFoundError,
   inventoryItemConflictError,
   inventoryItemNotFoundError,
+  inventoryUnitMismatchError,
   inventoryUnitNotFoundError,
 } from './errors/inventaris.errors';
 import type {
+  DailyInventoryPlanDeleteResponse,
+  DailyInventoryPlanDetailResponse,
+  DailyInventoryPlanListResponse,
+  DailyInventoryRealizationDetailResponse,
+  DailyInventoryRealizationListResponse,
+  DailyUsageReportResponse,
   InventoryItemDeleteResponse,
   InventoryItemDetailResponse,
   InventoryItemListResponse,
   InventoryItemStatsResponse,
   InventoryTransactionCreateResponse,
   InventoryTransactionListResponse,
+  InventoryVarianceReportResponse,
 } from './models/inventaris.model';
 import type {
   IInventarisRepository,
@@ -375,10 +395,464 @@ export class InventarisService {
     }
   }
 
+  async createDailyPlan(
+    businessId: string,
+    userId: string,
+    dto: CreateDailyInventoryPlanDto,
+  ): Promise<DailyInventoryPlanDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      await this.assertInventoryItemAndUnit(
+        businessId,
+        dto.inventory_item_id,
+        dto.unit,
+      );
+
+      const data = await this.repository.createDailyPlan({
+        businessId,
+        date: dto.date,
+        inventory_item_id: dto.inventory_item_id,
+        planned_usage_qty: dto.planned_usage_qty,
+        unit: dto.unit,
+        notes: dto.notes,
+        created_by: userId,
+      });
+
+      if (!data) {
+        throw inventoryItemNotFoundError({
+          businessId,
+          inventoryItemId: dto.inventory_item_id,
+        });
+      }
+
+      return {
+        success: true,
+        statusCode: 201,
+        message: 'Rencana inventaris harian berhasil dibuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, userId, dto },
+        'Unexpected error while creating daily inventory plan',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async listDailyPlans(
+    businessId: string,
+    query: ListDailyInventoryPlanQueryDto,
+  ): Promise<DailyInventoryPlanListResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 100;
+      const { data, total } = await this.repository.findDailyPlans({
+        businessId,
+        date: query.date,
+        page,
+        limit,
+      });
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Daftar rencana inventaris harian berhasil dimuat',
+        data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, query },
+        'Unexpected error while listing daily inventory plans',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async getDailyPlanById(
+    businessId: string,
+    dailyPlanId: string,
+  ): Promise<DailyInventoryPlanDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const data = await this.repository.findDailyPlanById(
+        businessId,
+        dailyPlanId,
+      );
+      if (!data) {
+        throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Detail rencana inventaris harian berhasil dimuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, dailyPlanId },
+        'Unexpected error while getting daily inventory plan',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async updateDailyPlan(
+    businessId: string,
+    dailyPlanId: string,
+    userId: string,
+    dto: UpdateDailyInventoryPlanDto,
+  ): Promise<DailyInventoryPlanDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      this.assertUpdatePayload(dto);
+
+      const current = await this.repository.findDailyPlanById(
+        businessId,
+        dailyPlanId,
+      );
+      if (!current) {
+        throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
+      }
+
+      const realization = await this.repository.findRealizationByPlanId(
+        businessId,
+        dailyPlanId,
+      );
+      if (realization) {
+        throw dailyInventoryPlanAlreadyRealizedError({
+          businessId,
+          dailyPlanId,
+        });
+      }
+
+      if (dto.unit !== undefined) {
+        await this.assertInventoryItemAndUnit(
+          businessId,
+          current.inventory_item_id,
+          dto.unit,
+        );
+      }
+
+      const data = await this.repository.updateDailyPlan(
+        businessId,
+        dailyPlanId,
+        {
+          ...dto,
+          updated_by: userId,
+        },
+      );
+      if (!data) {
+        throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Rencana inventaris harian berhasil diperbarui',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, dailyPlanId, userId, dto },
+        'Unexpected error while updating daily inventory plan',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async deleteDailyPlan(
+    businessId: string,
+    dailyPlanId: string,
+  ): Promise<DailyInventoryPlanDeleteResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const deleted = await this.repository.deleteDailyPlan(
+        businessId,
+        dailyPlanId,
+      );
+
+      if (!deleted) {
+        throw dailyInventoryPlanNotFoundError({ businessId, dailyPlanId });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Rencana inventaris harian berhasil dihapus',
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, dailyPlanId },
+        'Unexpected error while deleting daily inventory plan',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async submitDailyRealization(
+    businessId: string,
+    userId: string,
+    dto: CreateDailyInventoryRealizationDto,
+  ): Promise<DailyInventoryRealizationDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+
+      const plan = await this.repository.findDailyPlanByDateAndItem(
+        businessId,
+        dto.date,
+        dto.inventory_item_id,
+      );
+      if (!plan) {
+        throw dailyInventoryPlanNotFoundError({
+          businessId,
+          date: dto.date,
+          inventory_item_id: dto.inventory_item_id,
+        });
+      }
+
+      const data = await this.repository.createDailyRealization({
+        businessId,
+        date: dto.date,
+        inventory_item_id: dto.inventory_item_id,
+        actual_usage_qty: dto.actual_usage_qty,
+        waste_qty: dto.waste_qty ?? 0,
+        remaining_qty: dto.remaining_qty,
+        notes: dto.notes,
+        submitted_by: userId,
+      });
+
+      if (!data) {
+        throw dailyInventoryPlanNotFoundError({
+          businessId,
+          date: dto.date,
+          inventory_item_id: dto.inventory_item_id,
+        });
+      }
+
+      return {
+        success: true,
+        statusCode: 201,
+        message: 'Realisasi inventaris harian berhasil disubmit',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, userId, dto },
+        'Unexpected error while submitting daily inventory realization',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async listDailyRealizations(
+    businessId: string,
+    query: ListDailyInventoryRealizationQueryDto,
+  ): Promise<DailyInventoryRealizationListResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const page = query.page ?? 1;
+      const limit = query.limit ?? 100;
+      const { data, total } = await this.repository.findDailyRealizations({
+        businessId,
+        date: query.date,
+        page,
+        limit,
+      });
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Daftar realisasi inventaris harian berhasil dimuat',
+        data,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, query },
+        'Unexpected error while listing daily inventory realizations',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async getDailyRealizationById(
+    businessId: string,
+    dailyRealizationId: string,
+  ): Promise<DailyInventoryRealizationDetailResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const data = await this.repository.findDailyRealizationById(
+        businessId,
+        dailyRealizationId,
+      );
+      if (!data) {
+        throw dailyInventoryRealizationNotFoundError({
+          businessId,
+          dailyRealizationId,
+        });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Detail realisasi inventaris harian berhasil dimuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, dailyRealizationId },
+        'Unexpected error while getting daily inventory realization',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async getDailyUsageReport(
+    businessId: string,
+    date: string,
+  ): Promise<DailyUsageReportResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      const data = await this.repository.getDailyUsageReport(businessId, date);
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Laporan planned vs actual usage berhasil dimuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, date },
+        'Unexpected error while getting daily usage report',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
+  async getVarianceReport(
+    businessId: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<InventoryVarianceReportResponse> {
+    try {
+      await this.assertUnitExists(businessId);
+      if (startDate > endDate) {
+        throw new AppError({
+          code: ErrorCodes.ValidationFailed,
+          message: 'startDate tidak boleh lebih besar dari endDate',
+          status: 400,
+        });
+      }
+
+      const data = await this.repository.getVarianceReport(
+        businessId,
+        startDate,
+        endDate,
+      );
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Laporan variance penggunaan inventaris berhasil dimuat',
+        data,
+      };
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.error(
+        { err: error, businessId, startDate, endDate },
+        'Unexpected error while getting inventory variance report',
+      );
+      throw new AppError({
+        code: ErrorCodes.Internal,
+        message: 'Terjadi kesalahan internal',
+        status: 500,
+      });
+    }
+  }
+
   private async assertUnitExists(businessId: string): Promise<void> {
     const unit = await this.repository.findUnitById(businessId);
     if (!unit) {
       throw inventoryUnitNotFoundError({ businessId });
+    }
+  }
+
+  private async assertInventoryItemAndUnit(
+    businessId: string,
+    inventoryItemId: string,
+    unit: string,
+  ): Promise<void> {
+    const item = await this.repository.findById(businessId, inventoryItemId);
+    if (!item) {
+      throw inventoryItemNotFoundError({ businessId, inventoryItemId });
+    }
+
+    if (item.unit_of_measure !== unit) {
+      throw inventoryUnitMismatchError({
+        inventory_item_id: inventoryItemId,
+        expected_unit: item.unit_of_measure,
+        received_unit: unit,
+      });
     }
   }
 
@@ -393,7 +867,7 @@ export class InventarisService {
     }
   }
 
-  private assertUpdatePayload(dto: UpdateInventarisItemDto): void {
+  private assertUpdatePayload(dto: object): void {
     if (Object.keys(dto).length === 0) {
       throw new AppError({
         code: ErrorCodes.ValidationFailed,

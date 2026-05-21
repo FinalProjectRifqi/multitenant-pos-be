@@ -7,8 +7,23 @@ export class ListInventoryTransactionsQueryDto {
   inventory_item_id?: string;
 
   @IsOptional()
-  @IsIn(['in', 'out', 'adjustment'])
-  transaction_type?: 'in' | 'out' | 'adjustment';
+  @IsIn([
+    'in',
+    'out',
+    'adjustment',
+    'RESTOCK',
+    'DAILY_USAGE',
+    'WASTE',
+    'MANUAL_ADJUSTMENT',
+  ])
+  transaction_type?:
+    | 'in'
+    | 'out'
+    | 'adjustment'
+    | 'RESTOCK'
+    | 'DAILY_USAGE'
+    | 'WASTE'
+    | 'MANUAL_ADJUSTMENT';
 
   @IsOptional()
   @Type(() => Number)
